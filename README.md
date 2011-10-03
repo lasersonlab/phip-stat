@@ -1,5 +1,5 @@
 Pipeline for analyzing PhIP-seq data
-====================================
+------------------------------------
 
 See [Larman et. al.][1] for more information.
 
