@@ -23,7 +23,7 @@ for record in SeqIO.parse(input_filename,'fastq'):
     if num_processed == 0:
         op = open(outfilename,'w')
     
-    print >>op, record
+    op.write(record.format('fastq'))
     num_processed += 1
     
     if num_processed == packetsize:
