@@ -18,7 +18,7 @@ packetsize = args.packetsize
 
 num_processed = 0
 file_num = 1
-outfilename = os.path.join(work_dir,parts_dir,'part.%s.fastq' % file_num)
+outfilename = os.path.join(output_dir,'part.%s.fastq' % file_num)
 for record in SeqIO.parse(input_filename,'fastq'):
     if num_processed == 0:
         op = open(outfilename,'w')
@@ -30,7 +30,7 @@ for record in SeqIO.parse(input_filename,'fastq'):
         op.close()
         num_processed = 0
         file_num += 1
-        outfilename = os.path.join(work_dir,parts_dir,'part.%s.fastq' % file_num)
+        outfilename = os.path.join(output_dir,'part.%s.fastq' % file_num)
 
 if not op.closed:
     op.close()
