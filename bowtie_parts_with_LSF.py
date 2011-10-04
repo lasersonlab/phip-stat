@@ -38,7 +38,7 @@ params = {
     'index_name' : os.path.basename(args.index)
 }
 
-bowtie_cmd = 'BOWTIE_INDEXES=%(index_dir)s bowtie -n 3 -l 80 --trim3 20 --solexa1.3-quals --best --nomaqround --norc -k 1 --quiet %(index_name)s %(reads)s %(alignments)s'
+bowtie_cmd = 'BOWTIE_INDEXES=%(index_dir)s bowtie -n 3 -l 100 --best --nomaqround --norc -k 1 --quiet %(index_name)s %(reads)s %(alignments)s'
 
 for infilename in glob.glob(os.path.join(input_dir,'*.fastq')):
     basename = '.'.join(os.path.basename(infilename).split('.')[:-1])
