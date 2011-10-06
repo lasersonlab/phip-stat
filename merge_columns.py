@@ -9,6 +9,7 @@ import sys
 import glob
 import argparse
 import itertools
+import string
 
 header = lambda f: os.path.splitext(os.path.basename(f))[0]
 
@@ -31,7 +32,9 @@ with open(output_file,'w') as op:
     
     # iterate through lines
     for lines in itertools.izip(*file_iterators):
-        data = [line.split(',') for line in lines]
+        # ignore comment header lines; only checks first file
+        if lines[0].startswith('#'): continue
+        data = [map(string.strip,line.split(',')) for line in lines]
         # check that join column is the same
         for datum in data[1:]: assert data[0][0] == datum[0]
         print >>op, ','.join([data[0][0]]+[datum[args.field] for datum in data])
