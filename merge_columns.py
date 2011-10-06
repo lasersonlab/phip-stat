@@ -27,6 +27,7 @@ for infilename in input_files:
     file_data = []
     with open(infilename,'r') as ip:
         for line in ip:
+            if line.startswith('#'): continue
             row_data = [d.strip() for d in line.split(',')]
             file_data.append(row_data)
     col_data = map(list,zip(*file_data))
