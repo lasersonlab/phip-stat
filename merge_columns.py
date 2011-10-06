@@ -11,6 +11,7 @@ header = lambda f: os.path.splitext(os.path.basename(f))[0]
 argparser = argparse.ArgumentParser(description=None)
 argparser.add_argument('-i','--input',required=True)
 argparser.add_argument('-o','--output',required=True)
+argparser.add_argument('-f','--field',type=int,default=1)
 args = argparser.parse_args()
 
 input_dir = os.path.abspath(args.input)
@@ -37,7 +38,7 @@ for infilename in input_files:
     else:
         assert join_column == col_data[0]
     
-    merged_data.append([header(infilename)] + col_data[1])
+    merged_data.append([header(infilename)] + col_data[args.field])
     
     sys.stdout.write("finished.\n")
     sys.stdout.flush()
