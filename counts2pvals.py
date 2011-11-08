@@ -74,7 +74,7 @@ for i in xrange(output_counts.shape[1]):    # for each output column...
     idxs.append([])
     for input_value in uniq_input_values:   # ...compute lambdas/thetas
         # compute lambda
-        curr_counts = output_counts[np.logical_and(input_counts == input_value,output_counts[:,i] > 0),i]
+        curr_counts = output_counts[np.logical_and(input_counts == input_value,output_counts[:,i] > 1),i]
         if len(curr_counts) < 50:
             continue
         idxs[-1].append(input_value)
