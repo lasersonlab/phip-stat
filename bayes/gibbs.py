@@ -10,8 +10,8 @@ from numpy.random import permutation
 from scipy.special import gammaln
 
 # set parameters
-t = 4
-alpha = 0.1
+t = 1
+alpha = 1000
 # x_m = 1, always
 
 # load data
@@ -31,6 +31,7 @@ X = agg_by_protein['output']
 # Z = df['input']
 # X = df['output']
 
+Z = Z + 1   # add pseudocount
 Znorm = Z / float(Z.sum())
 N = len(X)
 n = sum(X)
@@ -62,14 +63,13 @@ def loglikelihood_w(w):
     return a - (t+1)*sum(log(w))
 
 def loglikelihood_theta(w,theta):
-    return sum((alpha*Z*w-1)*log(theta)) + gammaln(sum(alpha*Z*w)) - sum(gammaln(alpha*Z*w))
+    return sum((alpha*Znorm*w-1)*log(theta)) + gammaln(sum(alpha*Znorm*w)) - sum(gammaln(alpha*Znorm*w))
 
 def loglikelihood_X(theta):
     return b - c + sum(X*log(theta))
 
 def loglikelihood(w,theta): # also Z and X, but they are constant
     # computes joint probability of all variables
-    # return a - (t+1)*sum(log(w)) + sum((alpha*Z*w-1)*log(theta)) + gammaln(sum(alpha*Z*w)) - sum(gammaln(alpha*Z*w)) + b - c + sum(X*log(theta))
     return loglikelihood_w(w) + loglikelihood_theta(w,theta) + loglikelihood_X(theta)
 
 
@@ -77,7 +77,7 @@ def loglikelihood(w,theta): # also Z and X, but they are constant
 w = np.random.pareto(t,N) + 1
 
 # start Gibbs sampling loop
-iterations = 100
+iterations = 25
 
 loglikelihoods = []
 loglikelihoods_w = []
@@ -109,6 +109,13 @@ plt.plot(loglikelihoods_w,label='w')
 plt.plot(loglikelihoods_theta,label='theta')
 plt.plot(loglikelihoods_X,label='X')
 plt.plot(loglikelihoods,label='combined')
+plt.legend()
 plt.gcf().show()
 
+plt.figure()
+plt.hist(theta,bins=100,log=True)
+plt.gcf().show()
 
+plt.figure()
+plt.hist(w,bins=100,log=True)
+plt.gcf().show()
