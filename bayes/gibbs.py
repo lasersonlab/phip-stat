@@ -116,7 +116,10 @@ for i in xrange(iterations):
     # write w values to disk
     ws.append(w.copy())
 
+
+import matplotlib.pyplot as plt
 plt.close('all')
+plt.figure()
 plt.plot(loglikelihoods_w,label='w')
 plt.plot(loglikelihoods_theta,label='theta')
 plt.plot(loglikelihoods_X,label='X')
@@ -153,13 +156,17 @@ norm = mpl.colors.normalize(0,len(ws)-1)
 plt.figure()
 for (i,w_current) in enumerate(ws):
     if i % 200 == 0:
-        # temp = plt.hist(np.log10(w_current),bins=100,log=True,histtype='step',color=mpl.cm.jet(norm(i)),linewidth=1,alpha=0.5)
-        temp = plt.hist(w_current,bins=100,log=True,histtype='step',color=mpl.cm.jet(norm(i)),linewidth=1,alpha=0.5)
+        temp = plt.hist(np.log10(w_current),bins=100,log=True,histtype='step',color=mpl.cm.jet(norm(i)),linewidth=1,alpha=0.5)
+        # temp = plt.hist(w_current,bins=100,log=True,histtype='step',color=mpl.cm.jet(norm(i)),linewidth=1,alpha=0.5)
 
-plt.axis([0,2500,1,1e5])
+# plt.axis([0,2500,1,1e5])
 plt.gcf().show()
-plt.gcf().savefig('ws_hist_evolution_linear2.png')
+plt.gcf().savefig('ws_hist_evolution_log_t4.png')
 # plt.gcf().savefig('ws_hist_evolution_log.png')
 
+plt.figure()
+w_sums = [sum(w_current) for w_current in ws]
+plt.plot(w_sums)
+plt.gcf().show()
 
 # NP_002745.1_13 is the positive control
