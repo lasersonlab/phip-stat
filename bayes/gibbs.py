@@ -9,11 +9,6 @@ from numpy import log,sum
 from numpy.random import permutation
 from scipy.special import gammaln
 
-# set parameters
-t = 1
-alpha = 1000
-# x_m = 1, always
-
 # load data
 df = pd.read_csv('BC.serum.HC.3257.1.csv',index_col=None)
 df.columns = pd.Index(['peptide','input','output'])
@@ -31,10 +26,20 @@ X = agg_by_protein['output']
 # Z = df['input']
 # X = df['output']
 
+# take a fraction of data
+# X = X[0:200]
+# Z = Z[0:200]
+
 Z = Z + 1   # add pseudocount
 Znorm = Z / float(Z.sum())
 N = len(X)
 n = sum(X)
+
+# set parameters
+t = 4
+alpha = sum(X)
+# x_m = 1, always
+
 
 def sample_w_conditional(w,theta):
     # precompute random variates
@@ -43,6 +48,7 @@ def sample_w_conditional(w,theta):
     accept = log(np.random.rand(N))  # log of uniform variates for acceptance
     
     # metropolis-hastings
+    num_accepted = 0
     for i in permutation(N):
         sum_aZw_not_i = alpha * (sum(Znorm*w) - Znorm[i]*w[i])
         log_ratio = (t+1) * (log(w[i]) - log(w_star[i])) + \
@@ -52,6 +58,9 @@ def sample_w_conditional(w,theta):
         
         if accept[i] < log_ratio:
             w[i] = w_star[i]
+            num_accepted += 1
+    
+    return float(num_accepted) / N
 
 # log likelihood functions
 logfactorial = lambda n: sum(log(range(1,n+1)))
@@ -77,12 +86,14 @@ def loglikelihood(w,theta): # also Z and X, but they are constant
 w = np.random.pareto(t,N) + 1
 
 # start Gibbs sampling loop
-iterations = 25
+iterations = 3000
 
+ws = []
 loglikelihoods = []
 loglikelihoods_w = []
 loglikelihoods_theta = []
 loglikelihoods_X = []
+frac_accepted = []
 for i in xrange(iterations):
     if i % 1 == 0:
         sys.stdout.write("%i " % i)
@@ -93,7 +104,7 @@ for i in xrange(iterations):
     
     # sample from conditional on fitness w
     # this function modifies w in place
-    sample_w_conditional(w,theta)
+    frac_accepted.append( sample_w_conditional(w,theta) )
     
     # compute log likelihood
     # likelihoods.append(loglikelihood(w,theta))
@@ -103,19 +114,52 @@ for i in xrange(iterations):
     loglikelihoods.append(loglikelihoods_w[-1] + loglikelihoods_theta[-1] + loglikelihoods_X[-1])
     
     # write w values to disk
+    ws.append(w.copy())
 
 plt.close('all')
 plt.plot(loglikelihoods_w,label='w')
 plt.plot(loglikelihoods_theta,label='theta')
 plt.plot(loglikelihoods_X,label='X')
 plt.plot(loglikelihoods,label='combined')
-plt.legend()
+plt.legend(loc=4)
 plt.gcf().show()
+plt.gcf().savefig('loglikelihood_full.png')
+
+plt.figure()
+plt.plot(frac_accepted)
+plt.gcf().show()
+plt.gcf().savefig('frac_accepted_full.png')
 
 plt.figure()
 plt.hist(theta,bins=100,log=True)
 plt.gcf().show()
+plt.gcf().savefig('theta_final_hist.png')
 
 plt.figure()
 plt.hist(w,bins=100,log=True)
 plt.gcf().show()
+plt.gcf().savefig('w_final_hist.png')
+
+plt.figure()
+plt.plot(range(1,len(w)+1),sorted(w,reverse=True),'o-b',clip_on=False)
+plt.xscale('log')
+plt.gcf().show()
+plt.gcf().savefig('w_final_values.png')
+
+import matplotlib as mpl
+import matplotlib.colors
+import matplotlib.cm
+norm = mpl.colors.normalize(0,len(ws)-1)
+plt.figure()
+for (i,w_current) in enumerate(ws):
+    if i % 200 == 0:
+        # temp = plt.hist(np.log10(w_current),bins=100,log=True,histtype='step',color=mpl.cm.jet(norm(i)),linewidth=1,alpha=0.5)
+        temp = plt.hist(w_current,bins=100,log=True,histtype='step',color=mpl.cm.jet(norm(i)),linewidth=1,alpha=0.5)
+
+plt.axis([0,2500,1,1e5])
+plt.gcf().show()
+plt.gcf().savefig('ws_hist_evolution_linear2.png')
+# plt.gcf().savefig('ws_hist_evolution_log.png')
+
+
+# NP_002745.1_13 is the positive control
