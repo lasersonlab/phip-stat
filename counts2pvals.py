@@ -28,22 +28,50 @@ def GP_lambda_likelihood(counts):
     
     return lambda lam: sum(nx*(x*(x-1)/(x_bar+(x-x_bar)*lam))) - n*x_bar
 
+#################################################
+
+# DEPRECATED
 def GP_pmf(x,theta,lambd):
     log = np.log
     logP = log(theta) + (x-1)*log(theta+x*lambd) - (theta+x*lambd) - np.sum(log(np.arange(1,x+1)))
     return np.exp(logP)
 
+# DEPRECATED
 def GP_cdf(x,theta,lambd):
     return np.sum([GP_pmf(y,theta,lambd) for y in np.arange(x+1)])
 
+# DEPRECATED
 def GP_sf(x,theta,lambd):
     return reduce(lambda x,y: x-y, [1]+[GP_pmf(y,theta,lambd) for y in np.arange(x+1)])
 
+# DEPRECATED
 def GP_cdf_parallel(x,theta,lambd):
     log = np.log
     y = np.arange(x+1)
     logPxs = log(theta) + (y-1)*log(theta+y*lambd) - (theta+y*lambd) - np.sum(np.log((np.tri(x+1) * np.arange(x+1) + np.tri(x+1,k=-1).transpose())[:,1:]),axis=1)
     return np.sum(np.exp(logPxs))
+
+#################################################
+
+def log_GP_pmf(x,theta,lambd):
+    log = np.log
+    logP = log(theta) + (x-1)*log(theta+x*lambd) - (theta+x*lambd) - np.sum(log(np.arange(1,x+1)))
+    return logP
+
+def log_GP_sf(x,theta,lambd):
+    extensions = 10
+    start = x + 1
+    end = x + 100
+    pmf = [log_GP_pmf(y,theta,lambd) for y in xrange(start,end)]
+    while extensions > 0:
+        accum = np.logaddexp.accumulate( pmf )
+        if accum[-1] == accum[-2]: return accum[-1]
+        start = end
+        end += 100
+        pmf += [log_GP_pmf(y,theta,lambd) for y in xrange(start,end)]
+        extensions -= 1
+    raise ValueError
+
 
 # Load data
 sys.stderr.write("Loading data...\n"); sys.stderr.flush()
@@ -106,20 +134,22 @@ uniq_combos = []
 for i in xrange(output_counts.shape[1]):
     uniq_combos.append( set(zip(input_counts,output_counts[:,i])) )
 sys.stderr.write("computing %i combos\n" % sum([len(u) for u in uniq_combos])); sys.stderr.flush()
-logpval_hash = {}
+log10pval_hash = {}
 j = 0
 for (i,u) in enumerate(uniq_combos):
     for (ic,oc) in u:
         if j % 1000 == 0: sys.stderr.write("...computed %i p-vals\n" % j); sys.stderr.flush()
-        pval = max(GP_sf(oc,theta_fits[i](ic),lambda_fits[i](ic)),0)
-        logpval_hash[(i,ic,oc)] = -np.log10(pval)
+        log_pval = log_GP_sf(oc,theta_fits[i](ic),lambda_fits[i](ic))
+        log10pval_hash[(i,ic,oc)] = log_pval * np.log10( np.e ) * -1.
+        # pval = GP_sf(oc,theta_fits[i](ic),lambda_fits[i](ic))
+        # log10pval_hash[(i,ic,oc)] = -np.log10(pval)
         j += 1
 
 # Compute p-values for each clone using regressed GP parameters
 sys.stderr.write("Computing actual pvals...\n"); sys.stderr.flush()
 for (clone,ic,ocs) in zip(clones,input_counts,output_counts):
     output_string = clone
-    for (i,oc) in enumerate(ocs): output_string += ",%f" % logpval_hash[(i,ic,oc)]
+    for (i,oc) in enumerate(ocs): output_string += ",%f" % log10pval_hash[(i,ic,oc)]
     print >>outhandle, output_string
 
 # DEBUG
