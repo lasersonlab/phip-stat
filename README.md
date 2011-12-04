@@ -39,6 +39,8 @@ For the parallel method (make sure to set the queue):
     alns2counts_separated.py -i workdir/barcodes -o workdir/counts -r input_counts.csv
     counts2pvals_separated.py -i workdir/counts -o workdir/pvals -q short_serial -l logs_pvals
     ls -l workdir/pvals/*.csv | awk '$5 == 0 {print $8}' | xargs rm -f  # remove empty pval files
+    
+    # NOTE: ensure that all empty files in workdir/pvals have been deleted
     merge_columns.py -i workdir/pvals -o workdir/pvals.csv
 
 Note that any of these commands can be dispatched to the LSF job scheduler.
