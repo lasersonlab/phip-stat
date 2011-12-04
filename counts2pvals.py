@@ -70,7 +70,8 @@ def log_GP_sf(x,theta,lambd):
         end += 100
         pmf += [log_GP_pmf(y,theta,lambd) for y in xrange(start,end)]
         extensions -= 1
-    raise ValueError
+    # raise ValueError
+    return np.nan
 
 
 # Load data
