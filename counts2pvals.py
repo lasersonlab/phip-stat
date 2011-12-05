@@ -59,7 +59,7 @@ def log_GP_pmf(x,theta,lambd):
     return logP
 
 def log_GP_sf(x,theta,lambd):
-    extensions = 10
+    extensions = 20
     start = x + 1
     end = x + 100
     pmf = [log_GP_pmf(y,theta,lambd) for y in xrange(start,end)]
