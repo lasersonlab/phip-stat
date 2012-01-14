@@ -19,7 +19,7 @@ full_df = pd.read_csv(sys.argv[2],index_col=None)
 full_df.columns = pd.Index(['peptide','input','output'])
 
 # optional - subsample rows to make problem smaller
-df = full_df.ix[random.sample(xrange(full_df.shape[0]),2000)]
+df = full_df.ix[random.sample(xrange(full_df.shape[0]),20000)]
 
 Z = np.array(df['input'])
 X = np.array(df['output'])
@@ -77,7 +77,7 @@ def loglikelihood(w,theta): # also Z and X, but they are constant
 
 
 # start Gibbs sampling loop
-iterations = 5000
+iterations = 3000
 
 # generate initial configuration on fitness values w
 w = np.random.lognormal(mu,sigma,N)
@@ -157,6 +157,7 @@ for (i,w_current) in enumerate(ws):
     if i % 200 == 0:
         ax.hist(np.log10(w_current),bins=100,log=True,histtype='step',color=mpl.cm.jet(norm(i)),linewidth=1,alpha=0.5)
 
+ax.set_xlabel('log10(w)')
 # fig.show()
 fig.savefig(os.path.join(output_dir,'hist_evolution.png'))
 
@@ -216,7 +217,7 @@ ax.set_xlabel('input count')
 ax.set_ylabel('output count')
 ax.axis([0,1200,1,1e3])
 bar = fig.colorbar(ax.collections[0])
-bar.set_label('std(w)')
+bar.set_label('-1*std(w)')
 # fig.show()
 fig.savefig(os.path.join(output_dir,'raw_data_variance_ws.png'))
 
@@ -225,7 +226,7 @@ fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.scatter(np.log10(medians),stds)
 ax.set_xlabel('log10(median w)')
-ax.set_ylabel('-1*std(w)')
+ax.set_ylabel('std(w)')
 # fig.show()
 fig.savefig(os.path.join(output_dir,'median_w_vs_std_w.png'))
 
