@@ -38,7 +38,7 @@ mu = sigma ** 2
 # conditional distribution of w; more MCMC
 def sample_w_conditional(w,theta):
     # precompute random variates
-    w_star = w * np.random.lognormal(0.1**2,0.1,N) # proposed moves for w_i; median at 1
+    w_star = w * np.exp(np.random.normal(0,0.1,N))
     accept = log(np.random.rand(N))  # log of uniform variates for acceptance
     
     # metropolis-hastings
@@ -51,7 +51,7 @@ def sample_w_conditional(w,theta):
                      gammaln(sum_Zw_not_i + Z[i]*w_star[i]) - gammaln(Z[i]*w_star[i]) - \
                     (gammaln(sum_Zw_not_i + Z[i]*w[i]     ) - gammaln(Z[i]*w[i]    ))
         
-        if accept[i] < log_ratio:
+        if accept[i] < log_ratio + w_star[i]: # note: the 2nd term is a Jacobian
             w[i] = w_star[i]
             num_accepted += 1
     
