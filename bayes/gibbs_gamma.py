@@ -13,11 +13,11 @@ from scipy.special import gammaln
 
 interactive = False
 
-output_dir = os.path.abspath(sys.argv[3])
+output_dir = os.path.abspath(sys.argv[2])
 os.makedirs(output_dir,mode=0755)
 
 # load data
-full_df = pd.read_csv(sys.argv[2],index_col=None)
+full_df = pd.read_csv(sys.argv[1],index_col=None)
 full_df.columns = pd.Index(['peptide','input','output'])
 
 # optional - subsample rows to make problem smaller
@@ -31,9 +31,8 @@ N = len(X)
 n = sum(X)
 
 # parameters for w distributions
-sigma = float(sys.argv[1])
-mu = sigma ** 2
-
+scale = 1
+shape = 1
 
 # conditional distribution of w; more MCMC
 def sample_w_conditional(w,theta):
@@ -45,11 +44,11 @@ def sample_w_conditional(w,theta):
     num_accepted = 0
     for i in permutation(N):
         sum_Zw_not_i = sum(Z*w) - Z[i]*w[i]
-        log_ratio = log(w[i]) - log(w_star[i]) - \
-                    ((log(w_star[i]) - sigma**2)**2 + (log(w[i]) - sigma**2)**2) / (2*sigma**2) + \
-                    (w_star[i] - w[i]) * Z[i] * log(theta[i]) + \
-                     gammaln(sum_Zw_not_i + Z[i]*w_star[i]) - gammaln(Z[i]*w_star[i]) - \
-                    (gammaln(sum_Zw_not_i + Z[i]*w[i]     ) - gammaln(Z[i]*w[i]    ))
+        log_ratio = (shape - 1) * (log(w_star[i]) - log(w[i])) - \
+                    (w_star[i] - w[i]) / scale + \
+                    gammaln(sum_Zw_not_i + Z[i]*w_star[i]) - gammaln(Z[i]*w_star[i]) - \
+                    gammaln(sum_Zw_not_i + Z[i]*w[i])      + gammaln(Z[i]*w[i]) + \
+                    (w_star[i] - w[i]) * Z[i] * log(theta[i])
         
         if accept[i] < log_ratio + w_star[i]: # note: the 2nd term is a Jacobian
             w[i] = w_star[i]
@@ -60,12 +59,12 @@ def sample_w_conditional(w,theta):
 
 # log likelihood functions
 logfactorial = lambda n: sum(log(range(1,n+1)))
-a = -N * log(2*pi*sigma**2) / 2
+a = -shape*N*log(scale) - N*gammaln(shape)
 b = logfactorial(n)
 c = sum([logfactorial(x) for x in X])
 
 def loglikelihood_w(w):
-    return a - sum(log(w)) - sum((log(w) - mu)**2) / (2*sigma**2)
+    return a + (shape-1)*sum(log(w)) - sum(w)/scale
 
 def loglikelihood_theta(w,theta):
     return sum((Z*w-1)*log(theta)) + gammaln(sum(Z*w)) - sum(gammaln(Z*w))
@@ -82,7 +81,7 @@ def loglikelihood(w,theta): # also Z and X, but they are constant
 iterations = 10000
 
 # generate initial configuration on fitness values w
-w = np.random.lognormal(mu,sigma,N)
+w = np.random.gamma(shape,scale,N)
 
 ws = []
 loglikelihoods = []
@@ -113,9 +112,10 @@ for i in xrange(iterations):
 
 
 # write ws to disk:
-dfo = pd.DataFrame(ws)
-dfo.index.name = 'iter'
-dfo.to_csv(os.path.join(output_dir,'ws.csv'))
+if not interactive:
+    dfo = pd.DataFrame(ws)
+    dfo.index.name = 'iter'
+    dfo.to_csv(os.path.join(output_dir,'ws.csv'))
 
 
 # figures
