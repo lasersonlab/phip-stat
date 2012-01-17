@@ -21,7 +21,8 @@ full_df = pd.read_csv(sys.argv[2],index_col=None)
 full_df.columns = pd.Index(['peptide','input','output'])
 
 # optional - subsample rows to make problem smaller
-df = full_df.ix[random.sample(xrange(full_df.shape[0]),2000)]
+# df = full_df.ix[random.sample(xrange(full_df.shape[0]),2000)]
+df = full_df
 
 Z = np.array(df['input'])
 X = np.array(df['output'])
@@ -33,7 +34,6 @@ n = sum(X)
 # parameters for w distributions
 sigma = float(sys.argv[1])
 mu = sigma ** 2
-
 
 # conditional distribution of w; more MCMC
 def sample_w_conditional(w,theta):
@@ -85,7 +85,7 @@ iterations = 10000
 # generate initial configuration on fitness values w
 w = np.random.lognormal(mu,sigma,N)
 
-ws = []
+# ws = []
 loglikelihoods = []
 loglikelihoods_w = []
 loglikelihoods_theta = []
@@ -110,13 +110,17 @@ for i in xrange(iterations):
     loglikelihoods.append(loglikelihoods_w[-1] + loglikelihoods_theta[-1] + loglikelihoods_X[-1])
     
     # save intermediate w values for later
-    ws.append(w.copy())
+    # ws.append(w.copy())
 
 
 # write ws to disk:
-dfo = pd.DataFrame(ws)
-dfo.index.name = 'iter'
-dfo.to_csv(os.path.join(output_dir,'ws.csv'))
+if not interactive:
+    # dfo = pd.DataFrame(ws)
+    # dfo.index.name = 'iter'
+    # dfo.to_csv(os.path.join(output_dir,'ws.csv'))
+    
+    df['w'] = w
+    df.to_csv(os.path.join(output_dir,'output.csv'),index=False)
 
 
 # figures
@@ -206,17 +210,17 @@ bar.set_label('log10(w)')
 if interactive: fig.show()
 else: fig.savefig(os.path.join(output_dir,'raw_data_median_late_ws.png'))
 
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.scatter(Z,X,c=np.abs(log10(ws[5,:])),cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim,s=25,lw=0.5,clip_on=False,zorder=10)
-ax.set_yscale('log')
-ax.set_xlabel('input count')
-ax.set_ylabel('output count')
-ax.axis([0,1200,1,1e3])
-bar = fig.colorbar(ax.collections[0])
-bar.set_label('log10(w)')
-if interactive: fig.show()
-else: fig.savefig(os.path.join(output_dir,'raw_data_early_ws.png'))
+# fig = plt.figure()
+# ax = fig.add_subplot(111)
+# ax.scatter(Z,X,c=np.abs(log10(ws[5,:])),cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim,s=25,lw=0.5,clip_on=False,zorder=10)
+# ax.set_yscale('log')
+# ax.set_xlabel('input count')
+# ax.set_ylabel('output count')
+# ax.axis([0,1200,1,1e3])
+# bar = fig.colorbar(ax.collections[0])
+# bar.set_label('log10(w)')
+# if interactive: fig.show()
+# else: fig.savefig(os.path.join(output_dir,'raw_data_early_ws.png'))
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
@@ -256,13 +260,13 @@ else: fig.savefig(os.path.join(output_dir,'trajectories_heat.png'))
 # updates (log derivatives) of each component as heat map
 diffs = np.diff(log10(ws.T))
 dlim = max(np.abs(np.min(diffs)),np.abs(np.max(diffs)))
-fig = plt.figure(figsize=(iterations/250.,N/250.))
-ax = fig.add_axes([0.1,0.1,0.87,0.87])
-ax.imshow(diffs[order,:],aspect='auto',interpolation='nearest',cmap=mpl.cm.RdBu,vmin=-dlim,vmax=dlim)
-ax.set_xlabel('iteration')
-ax.set_ylabel('w component')
-if interactive: fig.show()
-else: fig.savefig(os.path.join(output_dir,'trajectories_derivatives_heat.png'))
+# fig = plt.figure(figsize=(iterations/250.,N/250.))
+# ax = fig.add_axes([0.1,0.1,0.87,0.87])
+# ax.imshow(diffs[order,:],aspect='auto',interpolation='nearest',cmap=mpl.cm.RdBu,vmin=-dlim,vmax=dlim)
+# ax.set_xlabel('iteration')
+# ax.set_ylabel('w component')
+# if interactive: fig.show()
+# else: fig.savefig(os.path.join(output_dir,'trajectories_derivatives_heat.png'))
 
 # updates (log derivatives) of each component as "spy"/binary
 fig = plt.figure(figsize=(iterations/250.,N/250.))
@@ -286,7 +290,7 @@ else: fig.savefig(os.path.join(output_dir,'hist_num_updates.png'))
 # final value?
 fig = plt.figure()
 ax = fig.add_subplot(111)
-ax.scatter(log10(ws.T[order,0]),updates)
+ax.scatter(np.abs(log10(ws.T[order,0])),updates)
 ax.set_xlabel('final w value')
 ax.set_ylabel('num updates for that values in %i iterations' % iterations)
 if interactive: fig.show()
