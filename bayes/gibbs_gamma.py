@@ -31,13 +31,15 @@ N = len(X)
 n = sum(X)
 
 # parameters for w distributions
-scale = 1
-shape = 1
+scale = 1.
+shape = 1 + 1./scale
+# shape = 1.
 
 # conditional distribution of w; more MCMC
 def sample_w_conditional(w,theta):
     # precompute random variates
-    w_star = w * np.exp(np.random.normal(0,0.1,N))
+    r = np.random.normal(0,0.1,N)
+    w_star = w * np.exp(r)
     accept = log(np.random.rand(N))  # log of uniform variates for acceptance
     
     # metropolis-hastings
