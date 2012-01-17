@@ -11,6 +11,8 @@ from numpy import log,log10,sum,pi
 from numpy.random import permutation
 from scipy.special import gammaln
 
+import statstools
+
 interactive = False
 
 output_dir = os.path.abspath(sys.argv[3])
@@ -21,8 +23,8 @@ full_df = pd.read_csv(sys.argv[2],index_col=None)
 full_df.columns = pd.Index(['peptide','input','output'])
 
 # optional - subsample rows to make problem smaller
-# df = full_df.ix[random.sample(xrange(full_df.shape[0]),2000)]
-df = full_df
+df = full_df.ix[random.sample(xrange(full_df.shape[0]),2000)]
+# df = full_df
 
 Z = np.array(df['input'])
 X = np.array(df['output'])
@@ -31,9 +33,14 @@ Z = Z + 1   # add pseudocount
 N = len(X)
 n = sum(X)
 
-# parameters for w distributions
+# parameters for prior w distributions
 sigma = float(sys.argv[1])
 mu = sigma ** 2
+
+# generate some synthetic w and output data
+wsim = np.random.lognormal(1.5**2,1.5,N)
+thetasim = np.random.dirichlet(Z*wsim)
+X = np.random.multinomial(n,thetasim)
 
 # conditional distribution of w; more MCMC
 def sample_w_conditional(w,theta):
@@ -85,7 +92,7 @@ iterations = 10000
 # generate initial configuration on fitness values w
 w = np.random.lognormal(mu,sigma,N)
 
-# ws = []
+ws = []
 loglikelihoods = []
 loglikelihoods_w = []
 loglikelihoods_theta = []
@@ -110,7 +117,7 @@ for i in xrange(iterations):
     loglikelihoods.append(loglikelihoods_w[-1] + loglikelihoods_theta[-1] + loglikelihoods_X[-1])
     
     # save intermediate w values for later
-    # ws.append(w.copy())
+    ws.append(w.copy())
 
 
 # write ws to disk:
@@ -130,6 +137,19 @@ if not interactive: mpl.use('agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors
 import matplotlib.cm
+
+# compute some data for figures
+w_sums = [sum(log10(w_current)) for w_current in ws]
+ws = np.asarray(ws)
+stds = np.std(ws[-1000:,:],axis=0)
+medians = np.median(ws[-1000:,:],axis=0)
+clim = max(np.abs(np.min(log10(ws))),np.abs(np.max(log10(ws))))
+modeslog10 = [h[1][np.argmax(h[0])] for h in (np.histogram(log10(w_component),bins=100,range=(-clim,clim)) for w_component in ws[-1000:,:].T)]
+order = np.argsort(ws[-1,:])[::-1]
+diffs = np.diff(log10(ws.T))
+dlim = max(np.abs(np.min(diffs)),np.abs(np.max(diffs)))
+updates = np.sum(diffs != 0,axis=1)
+
 
 # loglikelihood plots
 fig = plt.figure()
@@ -156,11 +176,25 @@ else: fig.savefig(os.path.join(output_dir,'frac_accepted.png'))
 # ranked w-values
 fig = plt.figure()
 ax = fig.add_subplot(111)
+ax.plot(range(1,len(wsim)+1),sorted(log10(wsim),reverse=True),'o-r',clip_on=False)
 ax.plot(range(1,len(w)+1),sorted(log10(w),reverse=True),'o-b',clip_on=False)
 ax.set_xlabel('rank')
 ax.set_ylabel('log10(w)')
 if interactive: fig.show()
 else: fig.savefig(os.path.join(output_dir,'ranked_w_final.png'))
+
+# correlation btwn wsim and w
+fig = plt.figure()
+ax = fig.add_subplot(111)
+# ax.scatter(log10(w),log10(wsim),c=statstools.density2d(log10(w),log10(wsim)),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
+# ax.scatter(log10(ws[100,:]),log10(wsim),c=statstools.density2d(log10(ws[100,:]),log10(wsim)),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
+# ax.scatter(log10(medians),log10(wsim),c=statstools.density2d(log10(medians),log10(wsim)),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
+ax.scatter(modeslog10,log10(wsim),c=statstools.density2d(modeslog10,log10(wsim)),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
+ax.set_xlabel('w')
+ax.set_ylabel('w_truth')
+if interactive: fig.show()
+# else: fig.savefig(os.path.join(output_dir,'ranked_w_final.png'))
+
 
 # histogram evolution of w-values
 norm = mpl.colors.normalize(0,len(ws)-1)
@@ -177,7 +211,6 @@ else: fig.savefig(os.path.join(output_dir,'hist_evolution.png'))
 # total weight in w
 fig = plt.figure()
 ax = fig.add_subplot(111)
-w_sums = [sum(log10(w_current)) for w_current in ws]
 ax.plot(w_sums)
 ax.set_xlabel('iteration')
 ax.set_ylabel('sum(log10(w))')
@@ -185,8 +218,6 @@ if interactive: fig.show()
 else: fig.savefig(os.path.join(output_dir,'total_weight.png'))
 
 # plot stds of the w values
-ws = np.asarray(ws)
-stds = np.std(ws[-1000:,:],axis=0)
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.plot(sorted(stds))
@@ -196,8 +227,6 @@ if interactive: fig.show()
 else: fig.savefig(os.path.join(output_dir,'ranked_stds.png'))
 
 # plot ip/op data colored by estimated w value or variance in estimate
-medians = np.median(ws[-1000:,:],axis=0)
-clim = max(np.abs(np.min(log10(ws))),np.abs(np.max(log10(ws))))
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.scatter(Z,X,c=log10(medians),cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim,s=25,lw=0.5,clip_on=False,zorder=10)
@@ -248,7 +277,6 @@ if interactive: fig.show()
 else: fig.savefig(os.path.join(output_dir,'trajectories.png'))
 
 # trajectories of each component as heat map
-order = np.argsort(ws[-1,:])[::-1]
 fig = plt.figure(figsize=(iterations/250.,N/250.))
 ax = fig.add_axes([0.1,0.1,0.87,0.87])
 ax.imshow(log10(ws.T)[order,:],aspect='auto',interpolation='nearest',cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim)
@@ -258,8 +286,6 @@ if interactive: fig.show()
 else: fig.savefig(os.path.join(output_dir,'trajectories_heat.png'))
 
 # updates (log derivatives) of each component as heat map
-diffs = np.diff(log10(ws.T))
-dlim = max(np.abs(np.min(diffs)),np.abs(np.max(diffs)))
 # fig = plt.figure(figsize=(iterations/250.,N/250.))
 # ax = fig.add_axes([0.1,0.1,0.87,0.87])
 # ax.imshow(diffs[order,:],aspect='auto',interpolation='nearest',cmap=mpl.cm.RdBu,vmin=-dlim,vmax=dlim)
@@ -278,7 +304,6 @@ if interactive: fig.show()
 else: fig.savefig(os.path.join(output_dir,'trajectories_derivatives_binary.png'))
 
 # how many updates does a typical w component get?
-updates = np.sum(diffs != 0,axis=1)
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.hist(updates,bins=50)
