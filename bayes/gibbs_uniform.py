@@ -36,8 +36,6 @@ n = sum(X)
 
 # parameters for prior w distributions
 alpha = 1.
-sigma = float(sys.argv[1])
-mu = sigma ** 2
 
 # generate some synthetic w and output data
 wtruth = np.random.lognormal(0,1.5,N)
@@ -70,12 +68,11 @@ def sample_w_conditional(w,theta):
 
 # log likelihood functions
 logfactorial = lambda n: sum(log(range(1,n+1)))
-a = -N * log(2*pi*sigma**2) / 2
 b = logfactorial(n)
 c = sum([logfactorial(x) for x in X])
 
 def loglikelihood_w(w):
-    return a - sum(log(w)) - sum((log(w) - mu)**2) / (2*sigma**2)
+    return -N * np.log(2)
 
 def loglikelihood_theta(w,theta):
     return sum((alpha*Z*w-1)*log(theta)) + gammaln(sum(alpha*Z*w)) - sum(gammaln(alpha*Z*w))
