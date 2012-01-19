@@ -35,12 +35,13 @@ N = len(X)
 n = sum(X)
 
 # parameters for prior w distributions
-alpha = 1.
+alpha = 0.05
 sigma = float(sys.argv[1])
-mu = sigma ** 2
+# mu = sigma ** 2
+mu = 0
 
 # generate some synthetic w and output data
-wtruth = np.random.lognormal(0,1.5,N)
+wtruth = np.random.lognormal(0,0.5,N)
 thetatruth = np.random.dirichlet(Z*wtruth)
 X = np.random.multinomial(n,thetatruth)
 
@@ -56,7 +57,7 @@ def sample_w_conditional(w,theta):
     for i in permutation(N):
         sum_Zw_not_i = sum(alpha*Z*w) - alpha*Z[i]*w[i]
         log_ratio = log(w[i]) - log(w_star[i]) - \
-                    ((log(w_star[i]) - sigma**2)**2 + (log(w[i]) - sigma**2)**2) / (2*sigma**2) + \
+                    ((log(w_star[i]) - mu)**2 + (log(w[i]) - mu)**2) / (2*sigma**2) + \
                     (w_star[i] - w[i]) * alpha * Z[i] * log(theta[i]) + \
                      gammaln(sum_Zw_not_i + alpha*Z[i]*w_star[i]) - gammaln(alpha*Z[i]*w_star[i]) - \
                     (gammaln(sum_Zw_not_i + alpha*Z[i]*w[i]     ) - gammaln(alpha*Z[i]*w[i]    ))
@@ -156,7 +157,7 @@ dlim = max(np.abs(np.min(diffs)),np.abs(np.max(diffs)))
 updates = np.sum(diffs != 0,axis=1)
 dirichlet_weights = np.sum(ws*Z*alpha,axis=1)
 theta_err = np.sqrt(np.sum((thetas - thetatruth)**2,axis=1))
-
+theta_err_L1 = np.sum(np.abs(thetas - thetatruth),axis=1)
 
 # loglikelihood plots
 fig = plt.figure()
@@ -198,7 +199,8 @@ else: fig.savefig(os.path.join(output_dir,'ranked_w_final.png'))
 # theta error
 fig = plt.figure()
 ax = fig.add_subplot(111)
-ax.plot(range(iterations),theta_err)
+# ax.plot(range(iterations),theta_err)
+ax.plot(range(iterations),theta_err_L1)
 ax.set_xlabel('iteration')
 ax.set_ylabel('theta error')
 if interactive: fig.show()
