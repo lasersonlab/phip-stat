@@ -77,7 +77,7 @@ def sample_w_conditional(w,theta):
 
 # log likelihood functions
 logfactorial = lambda n: sum(log(range(1,n+1)))
-a = -N * log(2*pi*sigma**2) / 2
+a = -N * log(2*pi*self.sigma**2) / 2
 b = logfactorial(n)
 c = sum([logfactorial(x) for x in X])
 
@@ -155,8 +155,8 @@ ws = np.asarray(ws)
 thetas = np.asarray(thetas)
 stds = np.std(ws[-1000:,:],axis=0)
 medians = np.median(ws[-1000:,:],axis=0)
-clim = max(np.abs(np.min(log10(ws))),np.abs(np.max(log10(ws))))
-modeslog10 = [h[1][np.argmax(h[0])] for h in (np.histogram(log10(w_component),bins=100,range=(-clim,clim)) for w_component in ws[-1000:,:].T)]
+extreme_log10_w = max(np.abs(np.min(log10(ws))),np.abs(np.max(log10(ws))))
+log10modes = [h[1][np.argmax(h[0])] for h in (np.histogram(log10(w_component),bins=100,range=(-extreme_log10_w,extreme_log10_w)) for w_component in ws[-1000:,:].T)]
 order = np.argsort(ws[-1,:])[::-1]
 diffs = np.diff(log10(ws.T))
 dlim = max(np.abs(np.min(diffs)),np.abs(np.max(diffs)))
@@ -254,7 +254,7 @@ ax = fig.add_subplot(111)
 # ax.scatter(log10(ws[100,:]),log10(wtruth),c=statstools.density2d(log10(ws[100,:]),log10(wtruth)),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
 # ax.scatter(log10(medians/np.sum(medians)),log10(wtruth/np.sum(wtruth)),c=statstools.density2d(log10(medians/np.sum(medians)),log10(wtruth/np.sum(wtruth))),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
 ax.scatter(centered(medians),centered(wtruth),c=stds,cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
-# ax.scatter(modeslog10,log10(wtruth),c=statstools.density2d(modeslog10,log10(wtruth)),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
+# ax.scatter(log10modes,log10(wtruth),c=statstools.density2d(log10modes,log10(wtruth)),cmap=plt.jet(),s=25,clip_on=False,lw=0.5)
 ax.set_xlabel('w')
 ax.set_ylabel('w_truth')
 ax.axis([0,np.max([wtruth,medians]),0,np.max([wtruth,medians])])
@@ -311,7 +311,7 @@ else: fig.savefig(os.path.join(output_dir,'ranked_stds.png'))
 # plot ip/op data colored by estimated w value or variance in estimate
 fig = plt.figure()
 ax = fig.add_subplot(111)
-ax.scatter(Z,X,c=log10(medians),cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim,s=25,lw=0.5,clip_on=False,zorder=10)
+ax.scatter(Z,X,c=log10(medians),cmap=mpl.cm.RdBu,vmin=-extreme_log10_w,vmax=extreme_log10_w,s=25,lw=0.5,clip_on=False,zorder=10)
 ax.set_yscale('log')
 ax.set_xlabel('input count')
 ax.set_ylabel('output count')
@@ -324,7 +324,7 @@ else: fig.savefig(os.path.join(output_dir,'raw_data_median_late_ws.png'))
 # truth
 fig = plt.figure()
 ax = fig.add_subplot(111)
-ax.scatter(Z,X,c=log10(wtruth),cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim,s=25,lw=0.5,clip_on=False,zorder=10)
+ax.scatter(Z,X,c=log10(wtruth),cmap=mpl.cm.RdBu,vmin=-extreme_log10_w,vmax=extreme_log10_w,s=25,lw=0.5,clip_on=False,zorder=10)
 ax.set_yscale('log')
 ax.set_xlabel('input count')
 ax.set_ylabel('output count')
@@ -337,7 +337,7 @@ else: fig.savefig(os.path.join(output_dir,'raw_data_median_late_ws.png'))
 
 # fig = plt.figure()
 # ax = fig.add_subplot(111)
-# ax.scatter(Z,X,c=np.abs(log10(ws[5,:])),cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim,s=25,lw=0.5,clip_on=False,zorder=10)
+# ax.scatter(Z,X,c=np.abs(log10(ws[5,:])),cmap=mpl.cm.RdBu,vmin=-extreme_log10_w,vmax=extreme_log10_w,s=25,lw=0.5,clip_on=False,zorder=10)
 # ax.set_yscale('log')
 # ax.set_xlabel('input count')
 # ax.set_ylabel('output count')
@@ -375,7 +375,7 @@ else: fig.savefig(os.path.join(output_dir,'trajectories.png'))
 # trajectories of each component as heat map
 fig = plt.figure(figsize=(iterations/250.,N/250.))
 ax = fig.add_axes([0.1,0.1,0.87,0.87])
-ax.imshow(log10(ws.T)[order,:],aspect='auto',interpolation='nearest',cmap=mpl.cm.RdBu,vmin=-clim,vmax=clim)
+ax.imshow(log10(ws.T)[order,:],aspect='auto',interpolation='nearest',cmap=mpl.cm.RdBu,vmin=-extreme_log10_w,vmax=extreme_log10_w)
 ax.set_xlabel('iteration')
 ax.set_ylabel('w component')
 if interactive: fig.show()
@@ -478,18 +478,249 @@ else: fig.savefig(os.path.join(output_dir,'generated_data.png'))
 ###############################################################
 ###############################################################
 
+# MODEL DEFINITION
+
+logfactorial = lambda n: sum(log(range(1,n+1)))
+
+class FitnessNetwork(object):
+    """Base class for doing Gibbs sampling using the fitness Bayes network"""
+    
+    def __init__(self, Z, X, alpha=1.):
+        """Always requires input Z and output X"""
+        self.Z = Z
+        self.X = X
+        self.alpha = alpha
+        self.N = len(X)
+        self.n = sum(X)
+    
+    def sample_prior():
+        raise NotImplementedError
+    
+    def sample_theta_given_w():
+        raise NotImplementedError
+    
+    def sample_w_given_theta():
+        raise NotImplementedError
+    
+    def loglikelihood_w(self,w):
+        raise NotImplementedError
+    
+    def loglikelihood_theta(self,theta,w):
+        raise NotImplementedError
+    
+    def loglikelihood_X(self,theta):
+        raise NotImplementedError
+    
+    def loglikelihood(self,theta,w):
+        return self.loglikelihood_w(w) + self.loglikelihood_theta(theta,w) + self.loglikelihood_X(theta)
+
+
+
+class LogNormalFitnessNetwork(FitnessNetwork):
+    
+    def __init__(self, Z, X, mu=0., sigma=1.):
+        FitnessNetwork.__init__(self,Z,X)
+        self.mu = mu
+        self.sigma = sigma
+        
+        # precompute a few constants for likelihoods
+        self.a = -self.N * log(2*pi*self.sigma**2) / 2
+        self.b = logfactorial(self.n)
+        self.c = sum([logfactorial(x) for x in self.X])
+    
+    def sample_prior(self):
+        return np.random.lognormal(self.mu,self.sigma,self.N)
+    
+    def sample_theta_given_w(self,w):
+        return np.random.dirichlet(self.alpha*self.Z*w+self.X)
+    
+    def sample_w_given_theta(self,w,theta):
+        # changes w in place
+        # returns fraction of accepted moves
+        
+        # precompute random variates
+        r = np.random.normal(0,0.1,self.N)
+        w_star = w * np.exp(r)
+        accept = log(np.random.rand(self.N))  # log of uniform variates for acceptance
+         
+        # metropolis-hastings
+        num_accepted = 0
+        for i in permutation(self.N):
+            sum_Zw_not_i = sum(self.alpha*self.Z*w) - self.alpha*self.Z[i]*w[i]
+            log_ratio = log(w[i]) - log(w_star[i]) - \
+                        ((log(w_star[i]) - self.mu)**2 + (log(w[i]) - self.mu)**2) / (2*self.sigma**2) + \
+                        (w_star[i] - w[i]) * self.alpha * self.Z[i] * log(theta[i]) + \
+                         gammaln(sum_Zw_not_i + self.alpha*self.Z[i]*w_star[i]) - gammaln(self.alpha*self.Z[i]*w_star[i]) - \
+                        (gammaln(sum_Zw_not_i + self.alpha*self.Z[i]*w[i]     ) - gammaln(self.alpha*self.Z[i]*w[i]    ))
+            
+            if accept[i] < log_ratio + r[i]: # note: the 2nd term is a Jacobian
+                w[i] = w_star[i]
+                num_accepted += 1
+        
+        return float(num_accepted) / self.N
+
+    def loglikelihood_w(self,w):
+        return self.a - sum(log(w)) - sum((log(w) - self.mu)**2) / (2*self.sigma**2)
+
+    def loglikelihood_theta(self,theta,w):
+        return sum((self.alpha*self.Z*w-1)*log(theta)) + gammaln(sum(self.alpha*self.Z*w)) - sum(gammaln(self.alpha*self.Z*w))
+
+    def loglikelihood_X(self,theta):
+        return self.b - self.c + sum(self.X*log(theta))
+
+
+
+class ParetoFitnessNetwork(FitnessNetwork):
+    
+    def __init__(self, Z, X, t=1.5):
+        FitnessNetwork.__init__(self,Z,X)
+        self.t = t
+                
+        # precompute a few constants for likelihoods
+        self.a = self.N*log(self.t)
+        self.b = logfactorial(self.n)
+        self.c = sum([logfactorial(x) for x in self.X])
+    
+    def sample_prior(self):
+        return np.random.pareto(t,N) + 1
+    
+    def sample_theta_given_w(self,w):
+        return np.random.dirichlet(self.alpha*self.Z*w+self.X)
+    
+    def sample_w_given_theta(self,w,theta):
+        # changes w in place
+        # returns fraction of accepted moves
+        
+        # precompute random variates
+        r = np.random.normal(0,0.1,self.N)
+        w_star = w * np.exp(r)
+        accept = log(np.random.rand(self.N))  # log of uniform variates for acceptance
+         
+        # metropolis-hastings
+        num_accepted = 0
+        for i in permutation(self.N):
+            sum_Zw_not_i = sum(self.alpha*self.Z*w) - self.alpha*self.Z[i]*w[i]
+            log_ratio = (self.t+1) * (log(w[i]) - log(w_star[i])) + \
+                        (w_star[i] - w[i]) * self.alpha * self.Z[i] * log(theta[i]) + \
+                        gammaln(self.alpha*self.Z[i]*w[i]) - gammaln(self.alpha*self.Z[i]*w_star[i]) + \
+                        gammaln(self.alpha*self.Z[i]*w_star[i] + sum_aZw_not_i) - gammaln(self.alpha*self.Z[i]*w[i] + sum_aZw_not_i)
+            
+            if accept[i] < log_ratio + r[i]: # note: the 2nd term is a Jacobian
+                w[i] = w_star[i]
+                num_accepted += 1
+        
+        return float(num_accepted) / self.N
+
+    def loglikelihood_w(self,w):
+        return self.a - (self.t+1)*sum(log(w))
+
+    def loglikelihood_theta(self,theta,w):
+        return sum((self.alpha*self.Z*w-1)*log(theta)) + gammaln(sum(self.alpha*self.Z*w)) - sum(gammaln(self.alpha*self.Z*w))
+
+    def loglikelihood_X(self,theta):
+        return self.b - self.c + sum(self.X*log(theta))
+
+
+
+class GammaFitnessNetwork(FitnessNetwork):
+    
+    def __init__(self, Z, X, scale=1., shape=1.):
+        FitnessNetwork.__init__(self,Z,X)
+        self.scale = scale
+        self.shape = shape
+                
+        # precompute a few constants for likelihoods
+        self.a = -self.shape*self.N*log(self.scale) - self.N*gammaln(self.shape)
+        self.b = logfactorial(self.n)
+        self.c = sum([logfactorial(x) for x in self.X])
+        
+    def sample_prior(self):
+        return np.random.gamma(self.shape,self.scale,self.N)
+    
+    def sample_theta_given_w(self,w):
+        return np.random.dirichlet(self.alpha*self.Z*w+self.X)
+    
+    def sample_w_given_theta(self,w,theta):
+        # changes w in place
+        # returns fraction of accepted moves
+        
+        # precompute random variates
+        r = np.random.normal(0,0.1,self.N)
+        w_star = w * np.exp(r)
+        accept = log(np.random.rand(self.N))  # log of uniform variates for acceptance
+         
+        # metropolis-hastings
+        num_accepted = 0
+        for i in permutation(self.N):
+            sum_Zw_not_i = sum(self.alpha*self.Z*w) - self.alpha*self.Z[i]*w[i]
+            log_ratio = (self.shape - 1) * (log(w[i]) - log(w_star[i])) - \
+                        (w_star[i] - w[i]) / self.scale + \
+                        (w_star[i] - w[i]) * self.alpha * self.Z[i] * log(theta[i]) + \
+                         gammaln(sum_Zw_not_i + self.alpha*self.Z[i]*w_star[i]) - gammaln(self.alpha*self.Z[i]*w_star[i]) - \
+                        (gammaln(sum_Zw_not_i + self.alpha*self.Z[i]*w[i]     ) - gammaln(self.alpha*self.Z[i]*w[i]    ))
+            
+            if accept[i] < log_ratio + r[i]: # note: the 2nd term is a Jacobian
+                w[i] = w_star[i]
+                num_accepted += 1
+        
+        return float(num_accepted) / self.N
+
+    def loglikelihood_w(self,w):
+        return self.a + (self.shape-1)*sum(log(w)) - sum(w)/self.scale
+
+    def loglikelihood_theta(self,theta,w):
+        return sum((self.alpha*self.Z*w-1)*log(theta)) + gammaln(sum(self.alpha*self.Z*w)) - sum(gammaln(self.alpha*self.Z*w))
+    
+    def loglikelihood_X(self,theta):
+        return self.b - self.c + sum(self.X*log(theta))
+
+
+
+# PLOTS
+
+import matplotlib as mpl
+if not interactive: mpl.use('agg')
+import matplotlib.pyplot as plt
+import matplotlib.colors
+import matplotlib.cm    
+
+class GibbsSamplingAnalysis(object):
+    """Provide many plots from the output of Gibbs sampling"""
+    def __init__(self, ws, thetas, llws, llths, llXs, lls, frac_accepted):
+        self.ws = np.asarray(ws)
+        self.thetas = np.asarray(thetas)
+        self.stds = np.std(self.ws[-1000:,:],axis=0)
+        self.medians = np.median(ws[-1000:,:],axis=0)
+        self.extreme_log10_w = max(np.abs(np.min(log10(ws))),np.abs(np.max(log10(ws))))
+        self.log10modes = [h[1][np.argmax(h[0])] for h in (np.histogram(log10(w_component),bins=100,range=(-self.extreme_log10_w,self.extreme_log10_w)) for w_component in self.ws[-1000:,:].T)]
+        
+        order = np.argsort(ws[-1,:])[::-1]
+        diffs = np.diff(log10(ws.T))
+        dlim = max(np.abs(np.min(diffs)),np.abs(np.max(diffs)))
+        updates = np.sum(diffs != 0,axis=1)
+        dirichlet_weights = np.sum(ws*Z*alpha,axis=1)
+        theta_err = np.sqrt(np.sum((thetas - thetatruth)**2,axis=1))
+        theta_err_L1 = np.sum(np.abs(thetas - thetatruth),axis=1)
+        percentiles = [sp.stats.percentileofscore(ws[-500:,i],1) for i in range(N)]
+        p5  = sp.stats.scoreatpercentile(log10(centered_matrix(ws)),5)
+        p25 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)),25)
+        p50 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)),50)
+        p75 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)),75)
+        p95 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)),95)
+
+        
+        
+        
+        
 
 
 
 
 
-
-
-
-
-
+# MAIN SCRIPT
 
 if __name__ == '__main__':
+    
     import argparse
 
     argparser = argparse.ArgumentParser(description=None)
@@ -510,16 +741,6 @@ if __name__ == '__main__':
         output_dir = os.getcwd()
         output_file = args.output
     
-    # define all the functions I will use based on the prior selection
-    if args.prior == 'lognormal':
-        sample_prior = 
-        sample_theta_given_w = 
-        sample_w_given_theta = 
-        loglikelihood_w = 
-        loglikelihood_theta = 
-        loglikelihood_X = 
-        loglikelihood = lambda w,theta: loglikelihood_w(w) + loglikelihood_theta(theta,w) + loglikelihood_X(theta)
-    
     # load data
     full_df = pd.read_csv(args.input,index_col=None)
     full_df.columns = pd.Index(['peptide','input','output'])
@@ -531,15 +752,24 @@ if __name__ == '__main__':
     else:
         df = full_df
     
-    Z = np.array(df['input'])
+    Z = np.array(df['input']) + 1   # add pseudocount
     X = np.array(df['output'])
-
-    Z = Z + 1   # add pseudocount
-    N = len(X)
-    n = sum(X)
+    
+    # define the model
+    if args.prior == 'lognormal':
+        model = LogNormalFitnessNetwork(Z=Z,X=X,mu=0.,sigma=1.)
+    elif args.prior == 'pareto':
+        model = ParetoFitnessNetwork(Z=Z,X=X,t=1.5)
+    elif args.prior == 'gamma':
+        model = GammaFitnessNetwork(Z=Z,X=X,scale=1.,shape=1.)
+    else:
+        raise ValueError, "Unrecognized prior"
+    
+    
+    # SAMPLING
     
     # sample from prior on w
-    w = sample_prior()
+    w = model.sample_prior()
     
     # variables to store intermediate values
     ws = [w]
@@ -548,7 +778,7 @@ if __name__ == '__main__':
     llths = []  # log likelihood of thetas given current values
     llXs = []   # log likelihood of Xs given current values
     lls = []    # total log likelihood
-    frac_accepted   # fraction of moves accepted
+    frac_accepted = []  # fraction of moves accepted
     
     # main loop for Gibbs sampling
     for i in xrange(args.iterations):
@@ -557,20 +787,20 @@ if __name__ == '__main__':
             sys.stdout.flush()
         
         # sample from conditional over theta
-        theta = sample_theta_given_w( w )
+        theta = model.sample_theta_given_w( w )
         
         # sample from conditional on fitness w
         # modifies w in place
-        frac_accepted.append( sample_w_given_theta( w, theta ) )
+        frac_accepted.append( model.sample_w_given_theta( w, theta ) )
         
         # save intermediate values
         ws.append( w.copy() )
         thetas.append( theta.copy() )
         
         # compute log likelihoods
-        llws.append(  loglikelihood_w( w )            )
-        llths.append( loglikelihood_theta( theta, w ) )
-        llXs.append(  loglikelihood_X( theta )        )
+        llws.append(  model.loglikelihood_w( w )            )
+        llths.append( model.loglikelihood_theta( theta, w ) )
+        llXs.append(  model.loglikelihood_X( theta )        )
         lls.append(   llws[-1] + llths[-1] + llXs[-1] )
         
 
@@ -581,14 +811,7 @@ median_w = np.median( ws[-1000:,:], axis=0 )
 df['w'] = median_w
 df.to_csv(os.path.join(output_dir,output_file),index=False,cols=['peptide','w'])
 
-        
-        
-        
-        
-    
 
-    
 
-    
+# GENERATE FIGURES (verbose output)
 
-    
