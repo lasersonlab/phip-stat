@@ -252,7 +252,7 @@ class GammaFitnessNetwork(FitnessNetwork):
 centered = lambda x: np.exp(np.log(x) - np.mean(np.log(x)))
 centered_matrix = lambda x: np.exp(np.log(x) - np.mean(np.log(x), axis=1).reshape((x.shape[0], 1)))
 
-show = lambda fig, output_dir, output_file: fig.show() if output_dir == None else fig.savefig(os.path.join(output_dir, 'loglikelihoods.png'))
+show = lambda fig, output_dir, output_file: fig.show() if output_dir == None else fig.savefig(os.path.join(output_dir, output_file))
 
 
 class GibbsSamplingAnalysis(object):
@@ -266,12 +266,12 @@ class GibbsSamplingAnalysis(object):
         self.n = sum(X)
         self.ws = np.asarray(ws)
         self.thetas = np.asarray(thetas)
-        self.llws = llws,
-        self.llths = llths,
-        self.llXs = llXs,
-        self.lls = lls,
+        self.llws = llws
+        self.llths = llths
+        self.llXs = llXs
+        self.lls = lls
         self.log10_w_sums = [sum(log10(w_current)) for w_current in self.ws]
-        self.frac_accepted = frac_accepted,
+        self.frac_accepted = frac_accepted
         self.stds = np.std(log10(self.ws[-1000:, :]), axis=0)
         self.medians = np.median(ws[-1000:, :], axis=0)
         self.extreme_log10_w = max(np.abs(np.min(log10(ws))), np.abs(np.max(log10(ws))))
@@ -303,20 +303,20 @@ class GibbsSamplingAnalysis(object):
         ax.legend(loc=4)
         show(fig, output_dir, 'loglikelihoods.png')
 
-    def frac_accepted(self, output_dir=None):
+    def frac_accepted_plot(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.plot(self.frac_accepted)
         ax.set_xlabel('iteration')
         ax.set_ylabel('frac moves accepted')
-        show(fig, output_dir, 'frac_accepted.png')
+        show(fig, output_dir, 'frac_accepted_plot.png')
 
     def ranked_ws(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         for (i, w_current) in enumerate(self.ws):
             if i % 200 == 0:
-                ax.plot(range(1, len(w_current) + 1), sorted(log10(centered(w_current))), reverse=True, color=mpl.cm.jet(self.iter_norm(i)), clip_on=False)
+                ax.plot(range(1, len(w_current) + 1), sorted(log10(centered(w_current)), reverse=True), color=mpl.cm.jet(self.iter_norm(i)), clip_on=False)
         ax.set_xlabel('rank (big to small)')
         ax.set_ylabel('log10(w)')
         show(fig, output_dir, 'ranked_ws.png')
@@ -337,11 +337,11 @@ class GibbsSamplingAnalysis(object):
     def w_distributions_ordered_by_input(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.scatter(range(self.N), self.p5[self.order_by_median_ws],  s=5, c='k', lw=0, zorder=1)
-        ax.scatter(range(self.N), self.p95[self.order_by_median_ws], s=5, c='k', lw=0, zorder=1)
-        for (pos, low, high) in zip(range(self.N), self.p25[self.order_by_median_ws], self.p75[self.order_by_median_ws]):
+        ax.scatter(range(self.N), self.p5[self.order_by_input],  s=5, c='k', lw=0, zorder=1)
+        ax.scatter(range(self.N), self.p95[self.order_by_input], s=5, c='k', lw=0, zorder=1)
+        for (pos, low, high) in zip(range(self.N), self.p25[self.order_by_input], self.p75[self.order_by_input]):
             ax.plot([pos, pos], [low, high], color='#bdbdbd', lw=2, zorder=2)
-        ax.scatter(range(self.N), self.p50[self.order_by_median_ws], s=10, c='r', linewidths=0, zorder=3)
+        ax.scatter(range(self.N), self.p50[self.order_by_input], s=10, c='r', linewidths=0, zorder=3)
         ax.axhline(0, zorder=0)
         ax.set_xlabel('w component (small to big)')
         ax.set_ylabel('w value')
@@ -355,13 +355,13 @@ class GibbsSamplingAnalysis(object):
         ax.set_ylabel('std of each component in last 1000 w vectors')
         show(fig, output_dir, 'ranked_stds.png')
 
-    def dirichlet_weights(self, output_dir=None):
+    def dirichlet_weights_trajectory(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.plot(range(self.iterations), self.dirichlet_weights)
+        ax.plot(range(self.iterations + 1), self.dirichlet_weights)
         ax.set_xlabel('iteration')
         ax.set_ylabel('Z * w')
-        show(fig, output_dir, 'dirichlet_weights.png')
+        show(fig, output_dir, 'dirichlet_weights_trajectory.png')
 
     def evolution_w_hist(self, output_dir=None):
         fig = plt.figure()
@@ -406,7 +406,7 @@ class GibbsSamplingAnalysis(object):
         show(fig, output_dir, 'raw_data_std.png')
 
     def trajectories(self, output_dir=None):
-        segments = tuple([np.c_[np.arange(self.iterations), log10(trajectory)] for trajectory in self.ws.T])
+        segments = tuple([np.c_[np.arange(self.iterations + 1), log10(trajectory)] for trajectory in self.ws.T])
         coll = mpl.collections.LineCollection(segments, colors=(0, 0, 0, 0.1))
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -418,7 +418,7 @@ class GibbsSamplingAnalysis(object):
         show(fig, output_dir, 'trajectories.png')
 
     def trajectories_heatmap(self, output_dir=None):
-        fig = plt.figure(figsize=(self.iterations / 250., self.N / 250.))
+        fig = plt.figure(figsize=((self.iterations + 1) / 250., self.N / 250.))
         ax = fig.add_axes([0.1, 0.1, 0.87, 0.87])
         ax.imshow(log10(self.ws.T)[self.order_by_ws_last, :], aspect='auto', interpolation='nearest', cmap=mpl.cm.RdBu, vmin=-self.extreme_log10_w, vmax=self.extreme_log10_w)
         ax.set_xlabel('iteration')
@@ -426,7 +426,7 @@ class GibbsSamplingAnalysis(object):
         show(fig, output_dir, 'trajectories_heatmap.png')
 
     def trajectory_derivatives_spy(self, output_dir=None):
-        fig = plt.figure(figsize=(self.iterations / 250., self.N / 250.))
+        fig = plt.figure(figsize=((self.iterations + 1) / 250., self.N / 250.))
         ax = fig.add_axes([0.1, 0.1, 0.87, 0.87])
         ax.spy(self.diffs_log10ws[self.order_by_ws_last, :], aspect='auto')
         ax.set_xlabel('iteration')
@@ -444,14 +444,14 @@ class GibbsSamplingAnalysis(object):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.scatter(np.abs(log10(self.medians)), self.updates)
-        ax.set_xlabel('median w value')
+        ax.set_xlabel('log10(median w value)')
         ax.set_ylabel('num updates for that values in %i iterations' % self.iterations)
         show(fig, output_dir, 'num_updates_vs_median_w.png')
 
     def num_updates_vs_std_w(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.scatter(np.abs(self.stds, self.updates))
+        ax.scatter(np.abs(self.stds), self.updates)
         ax.set_xlabel('std(w)')
         ax.set_ylabel('num updates for that values in %i iterations' % self.iterations)
         show(fig, output_dir, 'num_updates_vs_std_w.png')
@@ -465,7 +465,7 @@ class GibbsSamplingAnalysis(object):
         show(fig, output_dir, 'median_w_vs_std_w.png')
 
     def simulated_data(self, output_dir=None):
-        theta_sim = np.random.dirichlet(np.alpha * np.Z * np.medians)
+        theta_sim = np.random.dirichlet(self.alpha * self.Z * self.medians)
         X_sim = np.random.multinomial(self.n, theta_sim)
         fig = plt.figure()
 
@@ -487,18 +487,18 @@ class GibbsSamplingAnalysis(object):
 class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
     """Provide many plots from the output of Gibbs sampling"""
     def __init__(self, w_truth, theta_truth, Z, X, alpha, iterations, ws, thetas, llws, llths, llXs, lls, frac_accepted):
-        GibbsSamplingAnalysis.__init__(Z, X, alpha, iterations, ws, thetas, llws, llths, llXs, lls, frac_accepted)
+        GibbsSamplingAnalysis.__init__(self, Z, X, alpha, iterations, ws, thetas, llws, llths, llXs, lls, frac_accepted)
         self.w_truth = w_truth
         self.theta_truth = theta_truth
-        self.theta_err_L1 = np.sum(np.abs(self.thetas - self.thetatruth), axis=1)
-        self.theta_err_L2 = np.sqrt(np.sum((self.thetas - self.thetatruth) ** 2, axis=1))
+        self.theta_err_L1 = np.sum(np.abs(self.thetas - self.theta_truth), axis=1)
+        self.theta_err_L2 = np.sqrt(np.sum((self.thetas - self.theta_truth) ** 2, axis=1))
 
     def ranked_ws(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         for (i, w_current) in enumerate(self.ws):
             if i % 200 == 0:
-                ax.plot(range(1, len(w_current) + 1), sorted(log10(centered(w_current))), reverse=True, color=mpl.cm.jet(self.iter_norm(i)), clip_on=False)
+                ax.plot(range(1, len(w_current) + 1), sorted(log10(centered(w_current)), reverse=True), color=mpl.cm.jet(self.iter_norm(i)), clip_on=False)
         ax.plot(range(1, len(self.w_truth) + 1), sorted(log10(centered(self.w_truth)), reverse=True), '-k', clip_on=False, linewidth=2)
         ax.set_xlabel('rank (big to small)')
         ax.set_ylabel('log10(w)')
@@ -507,9 +507,9 @@ class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
     def w_truth_vs_median_w(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.scatter(centered(self.medians), centered(self.w_truth), c=self.stds, cmap=plt.jet(), s=25, clip_on=False, lw=0.5)
-        ax.set_xlabel('median w')
-        ax.set_ylabel('true w')
+        ax.scatter(log10(centered(self.medians), log10(centered(self.w_truth), c=self.stds, cmap=plt.jet(), s=25, clip_on=False, lw=0.5)
+        ax.set_xlabel('log10(median w)')
+        ax.set_ylabel('log10(true w)')
         ax.axis([0, np.max([self.w_truth, self.medians]), 0, np.max([self.w_truth, self.medians])])
         show(fig, output_dir, 'w_truth_vs_median_w.png')
 
@@ -554,6 +554,10 @@ if __name__ == '__main__':
     argparser.add_argument('--verbose', action='store_true')
     args = argparser.parse_args()
 
+    def msg(txt):
+        sys.stdout.write(txt)
+        sys.stdout.flush()
+
     # check if I will dump out tons of figures about the process
     if args.verbose:
         output_dir = os.path.splitext(args.output)[0]
@@ -564,8 +568,10 @@ if __name__ == '__main__':
         output_file = args.output
 
     # load data
+    msg("Loading data...")
     full_df = pd.read_csv(args.input, index_col=None)
     full_df.columns = pd.Index(['peptide', 'input', 'output'])
+    msg("finished\n")
 
     # subsample rows to make problem smaller
     if args.subsample > 0:
@@ -578,6 +584,7 @@ if __name__ == '__main__':
     X = np.array(df['output'])
 
     # define the model
+    msg("Defining model...")
     if args.prior == 'lognormal':
         model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
         if args.truth: (w_truth, theta_truth, X) = model.generate_truth()
@@ -592,8 +599,10 @@ if __name__ == '__main__':
         model = GammaFitnessNetwork(Z=Z, X=X, scale=1., shape=1.)
     else:
         raise ValueError("Unrecognized prior")
+    msg("finished\n")
 
     # SAMPLING
+    msg("Starting Gibbs sampler...\n")
 
     # sample from prior on w
     w = model.sample_prior()
@@ -630,28 +639,34 @@ if __name__ == '__main__':
         llXs.append(model.loglikelihood_X(theta))
         lls.append(llws[-1] + llths[-1] + llXs[-1])
 
+    msg("\n...finished\n")
 
     ws = np.asarray(ws)
     median_w = np.median(ws[-1000:, :],  axis=0)
 
     # write results to disk
+    msg("Writing w values to disk...")
     df['w'] = median_w
     df.to_csv(os.path.join(output_dir, output_file), index=False, cols=['peptide', 'w'])
+    msg("finished\n")
 
     # GENERATE FIGURES (verbose output)
     if args.verbose:
+        msg("Computing values for figures...")
         if not args.truth:
             plots = GibbsSamplingAnalysis(Z, X, model.alpha, args.iterations, ws, thetas, llws, llths, llXs, lls, frac_accepted)
         else:
             plots = GibbsSamplingAnalysis_with_truth(w_truth, theta_truth, Z, X, model.alpha, args.iterations, ws, thetas, llws, llths, llXs, lls, frac_accepted)
+        msg("finished\n")
 
+        msg("Plotting figures...")
         plots.loglikelihoods(output_dir)
-        plots.frac_accepted(output_dir)
+        plots.frac_accepted_plot(output_dir)
         plots.ranked_ws(output_dir)
         plots.w_distributions_ordered_by_medians(output_dir)
         plots.w_distributions_ordered_by_input(output_dir)
         plots.ranked_stds(output_dir)
-        plots.dirichlet_weights(output_dir)
+        plots.dirichlet_weights_trajectory(output_dir)
         plots.evolution_w_hist(output_dir)
         plots.total_w_weight(output_dir)
         plots.raw_data_by_w(output_dir)
@@ -669,3 +684,5 @@ if __name__ == '__main__':
             plots.w_truth_vs_median_w(output_dir)
             plots.w_truth_vs_median_w_ranks(output_dir)
             plots.raw_data_by_true_w(output_dir)
+
+        msg("finished\n")
