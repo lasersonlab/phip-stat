@@ -172,6 +172,25 @@ class ParetoFitnessNetwork(FitnessNetwork):
         return self.b - self.c + sum(self.X * log(theta))
 
 
+class SymParetoFitnessNetwork(FitnessNetwork):
+
+    def __init__(self, Z, X, t=1.5):
+        FitnessNetwork.__init__(self, Z, X)
+        self.t = t
+
+        # precompute a few constants for likelihoods
+        # self.a = self.N * log(self.t)
+        # self.b = logfactorial(self.n)
+        # self.c = sum([logfactorial(x) for x in self.X])
+
+    def sample_prior(self):
+        enrichment = np.random.pareto(self.t, self.N) + 1
+        depletion = 1. / enrichment
+        choices = sp.stats.bernoulli.rvs(0.5,size=10)
+        return np.choose(choices,[enrichment,depletion])
+
+
+
 class GammaFitnessNetwork(FitnessNetwork):
 
     def __init__(self, Z, X, scale=1., shape=1.):
@@ -539,7 +558,7 @@ if __name__ == '__main__':
     if args.verbose:
         output_dir = os.path.splitext(args.output)[0]
         os.makedirs(output_dir, mode=0755)
-        output_file = os.path.join(output_dir, os.path.basename(args.output))
+        output_file = os.path.basename(args.output)
     else:
         output_dir = os.getcwd()
         output_file = args.output
