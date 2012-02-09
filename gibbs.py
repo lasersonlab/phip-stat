@@ -186,7 +186,7 @@ class SymParetoFitnessNetwork(FitnessNetwork):
     def sample_prior(self):
         enrichment = np.random.pareto(self.t, self.N) + 1
         depletion = 1. / enrichment
-        choices = sp.stats.bernoulli.rvs(0.5,size=10)
+        choices = sp.stats.bernoulli.rvs(0.5,size=self.N)
         return np.choose(choices,[enrichment,depletion])
 
 
@@ -273,23 +273,23 @@ class GibbsSamplingAnalysis(object):
         self.log10_w_sums = [sum(log10(w_current)) for w_current in self.ws]
         self.frac_accepted = frac_accepted
         self.stds = np.std(log10(self.ws[-1000:, :]), axis=0)
-        self.medians = np.median(ws[-1000:, :], axis=0)
-        self.extreme_log10_w = max(np.abs(np.min(log10(ws))), np.abs(np.max(log10(ws))))
+        self.medians = np.median(self.ws[-1000:, :], axis=0)
+        self.extreme_log10_w = max(np.abs(np.min(log10(self.ws))), np.abs(np.max(log10(self.ws))))
         self.log10modes = [h[1][np.argmax(h[0])] for h in (np.histogram(log10(w_component), bins=100, range=(-self.extreme_log10_w, self.extreme_log10_w)) for w_component in self.ws[-1000:, :].T)]
-        self.order_by_ws_last = np.argsort(ws[-1, :])[::-1]
+        self.order_by_ws_last = np.argsort(self.ws[-1, :])[::-1]
         self.order_by_median_ws = np.argsort(self.medians)[::-1]
         self.order_by_input = np.argsort(self.Z)
-        self.diffs_log10ws = np.diff(log10(ws.T))
+        self.diffs_log10ws = np.diff(log10(self.ws.T))
         self.extreme_diff = max(np.abs(np.min(self.diffs_log10ws)), np.abs(np.max(self.diffs_log10ws)))
         self.updates = np.sum(self.diffs_log10ws != 0, axis=1)
-        self.dirichlet_weights = np.sum(ws * Z * alpha, axis=1)
-        self.percentiles_at_1 = [sp.stats.percentileofscore(ws[-500:, i], 1) for i in range(self.N)]
-        self.p5  = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 5)
-        self.p25 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 25)
-        self.p50 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 50)
-        self.p75 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 75)
-        self.p95 = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 95)
-        self.iter_norm = mpl.colors.normalize(0, len(ws) - 1)
+        self.dirichlet_weights = np.sum(self.ws * Z * alpha, axis=1)
+        self.percentiles_at_1 = [sp.stats.percentileofscore(self.ws[-500:, i], 1) for i in range(self.N)]
+        self.p5  = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 5)
+        self.p25 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 25)
+        self.p50 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 50)
+        self.p75 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 75)
+        self.p95 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 95)
+        self.iter_norm = mpl.colors.normalize(0, len(self.ws) - 1)
 
     def loglikelihoods(self, output_dir=None):
         fig = plt.figure()
@@ -470,13 +470,13 @@ class GibbsSamplingAnalysis(object):
         fig = plt.figure()
 
         ax = fig.add_subplot(211)
-        ax.scatter(Z, X, c='k', s=3, lw=0)
+        ax.scatter(self.Z, self.X, c='k', s=3, lw=0)
         ax.set_yscale('log')
         ax.axis([0, 2000, 1, 1e3])
         ax.set_ylabel('real data')
 
         ax = fig.add_subplot(212)
-        ax.scatter(Z, X_sim, c='k', s=3, lw=0)
+        ax.scatter(self.Z, X_sim, c='k', s=3, lw=0)
         ax.set_yscale('log')
         ax.axis([0, 2000, 1, 1e3])
         ax.set_ylabel('simulated')
@@ -507,10 +507,10 @@ class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
     def w_truth_vs_median_w(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.scatter(log10(centered(self.medians), log10(centered(self.w_truth), c=self.stds, cmap=plt.jet(), s=25, clip_on=False, lw=0.5)
+        ax.scatter(log10(centered(self.medians)), log10(centered(self.w_truth)), c=self.stds, cmap=plt.jet(), s=25, clip_on=False, lw=0.5)
         ax.set_xlabel('log10(median w)')
         ax.set_ylabel('log10(true w)')
-        ax.axis([0, np.max([self.w_truth, self.medians]), 0, np.max([self.w_truth, self.medians])])
+        ax.axis([np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians])), np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians]))])
         show(fig, output_dir, 'w_truth_vs_median_w.png')
 
     def w_truth_vs_median_w_ranks(self, output_dir=None):
@@ -643,6 +643,7 @@ if __name__ == '__main__':
 
     ws = np.asarray(ws)
     median_w = np.median(ws[-1000:, :],  axis=0)
+    mean_w = np.mean(ws[-1000:, :],  axis=0)
 
     # write results to disk
     msg("Writing w values to disk...")
