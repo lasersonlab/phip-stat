@@ -555,8 +555,8 @@ if __name__ == '__main__':
     args = argparser.parse_args()
 
     def msg(txt):
-        sys.stdout.write(txt)
-        sys.stdout.flush()
+        sys.stderr.write(txt)
+        sys.stderr.flush()
 
     # check if I will dump out tons of figures about the process
     if args.verbose:
@@ -619,8 +619,8 @@ if __name__ == '__main__':
     # main loop for Gibbs sampling
     for i in xrange(args.iterations):
         if i % 10 == 0:
-            sys.stdout.write("%i " % i)
-            sys.stdout.flush()
+            sys.stderr.write("%i " % i)
+            sys.stderr.flush()
 
         # sample from conditional over theta
         theta = model.sample_theta_given_w(w)
