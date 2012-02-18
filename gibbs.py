@@ -274,6 +274,7 @@ class GibbsSamplingAnalysis(object):
         self.frac_accepted = frac_accepted
         self.stds = np.std(log10(self.ws[-1000:, :]), axis=0)
         self.medians = np.median(self.ws[-1000:, :], axis=0)
+        self.means = np.mean(self.ws[-1000:, :],  axis=0)
         self.extreme_log10_w = max(np.abs(np.min(log10(self.ws))), np.abs(np.max(log10(self.ws))))
         self.log10modes = [h[1][np.argmax(h[0])] for h in (np.histogram(log10(w_component), bins=100, range=(-self.extreme_log10_w, self.extreme_log10_w)) for w_component in self.ws[-1000:, :].T)]
         self.order_by_ws_last = np.argsort(self.ws[-1, :])[::-1]
@@ -512,6 +513,15 @@ class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
         ax.set_ylabel('log10(true w)')
         ax.axis([np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians])), np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians]))])
         show(fig, output_dir, 'w_truth_vs_median_w.png')
+    
+    def w_truth_vs_mean_w(self, output_dir=None):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(log10(centered(self.means)), log10(centered(self.w_truth)), c=self.stds, cmap=plt.jet(), s=25, clip_on=False, lw=0.5)
+        ax.set_xlabel('log10(mean w)')
+        ax.set_ylabel('log10(true w)')
+        ax.axis([np.min(np.log10([self.w_truth, self.means])), np.max(np.log10([self.w_truth, self.means])), np.min(np.log10([self.w_truth, self.means])), np.max(np.log10([self.w_truth, self.means]))])
+        show(fig, output_dir, 'w_truth_vs_mean_w.png')
 
     def w_truth_vs_median_w_ranks(self, output_dir=None):
         fig = plt.figure()
