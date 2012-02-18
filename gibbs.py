@@ -26,7 +26,7 @@ from scipy.special import gammaln
 # MODEL DEFINITION
 #
 
-logfactorial = lambda n: sum(log(range(1, n + 1)))
+logfactorial = lambda n: sum(log(np.arange(1, n + 1)))
 
 
 class FitnessNetwork(object):
