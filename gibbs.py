@@ -518,7 +518,7 @@ class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
     def w_truth_vs_median_w_by_ratio(self, output_dir=None):
         minlog10ratio = np.min(log10(self.ratios))
         maxlog10ratio = np.max(log10(self.ratios))
-        extremelog10ratio = np.max(np.abs(minlog10ratio,maxlog10ratio))
+        extremelog10ratio = np.max(np.abs([minlog10ratio,maxlog10ratio]))
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.scatter(log10(centered(self.medians)), log10(centered(self.w_truth)), c=log10(self.ratios), cmap=mpl.cm.RdBu, vmin=-extremelog10ratio, vmax=extremelog10ratio, s=25, clip_on=False, lw=0.5)
