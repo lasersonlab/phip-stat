@@ -260,6 +260,7 @@ class GibbsSamplingAnalysis(object):
     def __init__(self, Z, X, alpha, iterations, ws, thetas, llws, llths, llXs, lls, frac_accepted):
         self.Z = Z
         self.X = X
+        self.ratios = np.float_(self.X) / self.Z
         self.alpha = alpha
         self.iterations = iterations
         self.N = len(X)
@@ -514,6 +515,20 @@ class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
         ax.axis([np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians])), np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians]))])
         show(fig, output_dir, 'w_truth_vs_median_w.png')
     
+    def w_truth_vs_median_w_by_ratio(self, output_dir=None):
+        minlog10ratio = np.min(log10(self.ratios))
+        maxlog10ratio = np.max(log10(self.ratios))
+        extremelog10ratio = np.max(np.abs(minlog10ratio,maxlog10ratio))
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(log10(centered(self.medians)), log10(centered(self.w_truth)), c=log10(self.ratios), cmap=mpl.cm.RdBu, vmin=-extremelog10ratio, vmax=extremelog10ratio, s=25, clip_on=False, lw=0.5)
+        ax.set_xlabel('log10(median w)')
+        ax.set_ylabel('log10(true w)')
+        ax.axis([np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians])), np.min(np.log10([self.w_truth, self.medians])), np.max(np.log10([self.w_truth, self.medians]))])
+        bar = fig.colorbar(ax.collections[0])
+        bar.set_label('log10(output/input)')
+        show(fig, output_dir, 'w_truth_vs_median_w_by_ratio.png')
+    
     def w_truth_vs_mean_w(self, output_dir=None):
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -543,6 +558,15 @@ class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
         bar = fig.colorbar(ax.collections[0])
         bar.set_label('log10(centered(w_truth))')
         show(fig, output_dir, 'raw_data_by_true_w.png')
+    
+    def error_vs_updates(self, output_dir=None):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(log10(centered(self.w_truth)) - log10(centered(self.medians)), self.updates, c=self.stds, cmap=plt.jet(), s=25, clip_on=False, lw=0.5)
+        ax.set_xlabel('log10(w_truth)-log10(median w)')
+        ax.set_ylabel('num updates')
+        show(fig, output_dir, 'error_vs_updates.png')
+
 
 
 ############################
