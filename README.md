@@ -41,7 +41,7 @@ For the parallel method (make sure to set the queue):
     ls -l workdir/pvals/*.csv | awk '$5 == 0 {print $8}' | xargs rm -f  # remove empty pval files
     
     # NOTE: ensure that all empty files in workdir/pvals have been deleted
-    merge_columns.py -i workdir/pvals -o workdir/pvals.csv
+    merge_columns.py -f 2 -i workdir/pvals -o workdir/pvals.csv
 
 Note that any of these commands can be dispatched to the LSF job scheduler.
 
