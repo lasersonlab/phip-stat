@@ -605,7 +605,7 @@ if __name__ == '__main__':
     # load data
     msg("Loading data...")
     full_df = pd.read_csv(args.input, index_col=None)
-    full_df.columns = pd.Index(['peptide', 'input', 'output'])
+    full_df.columns = pd.Index(['clone', 'input', 'output'])
     msg("finished\n")
 
     # subsample rows to make problem smaller
@@ -621,17 +621,20 @@ if __name__ == '__main__':
     # define the model
     msg("Defining model...")
     if args.prior == 'lognormal':
-        model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
-        if args.truth: (w_truth, theta_truth, X) = model.generate_truth()
-        model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
+        model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=2)
+        if args.truth:
+            (w_truth, theta_truth, X) = model.generate_truth()
+            model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
     elif args.prior == 'pareto':
         model = ParetoFitnessNetwork(Z=Z, X=X, t=1.5)
-        if args.truth: (w_truth, theta_truth, X) = model.generate_truth()
-        model = ParetoFitnessNetwork(Z=Z, X=X, t=1.5)
+        if args.truth:
+            (w_truth, theta_truth, X) = model.generate_truth()
+            model = ParetoFitnessNetwork(Z=Z, X=X, t=1.5)
     elif args.prior == 'gamma':
         model = GammaFitnessNetwork(Z=Z, X=X, scale=1., shape=1.)
-        if args.truth: (w_truth, theta_truth, X) = model.generate_truth()
-        model = GammaFitnessNetwork(Z=Z, X=X, scale=1., shape=1.)
+        if args.truth:
+            (w_truth, theta_truth, X) = model.generate_truth()
+            model = GammaFitnessNetwork(Z=Z, X=X, scale=1., shape=1.)
     else:
         raise ValueError("Unrecognized prior")
     msg("finished\n")
@@ -683,7 +686,7 @@ if __name__ == '__main__':
     # write results to disk
     msg("Writing w values to disk...")
     df['w'] = median_w
-    df.to_csv(os.path.join(output_dir, output_file), index=False, cols=['peptide', 'w'])
+    df.to_csv(os.path.join(output_dir, output_file), index=False, cols=['clone', 'w'])
     msg("finished\n")
 
     # GENERATE FIGURES (verbose output)
