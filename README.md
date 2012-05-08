@@ -45,4 +45,29 @@ For the parallel method (make sure to set the queue):
 
 Note that any of these commands can be dispatched to the LSF job scheduler.
 
+
+PGM inference model
+-------------------
+
+There is a Gibbs sampling method for computing "selection values" as well.  This
+script expects a CSV file with three columns: the clone names, the input counts,
+and the output counts.
+
+    gibbs.py --input counts.csv --output output.csv --verbose
+
+The `--verbose` flag will instead create a directory called `output` and also
+dump a bunch of diagnostic figures there.
+
+There will soon be an `mcmc.py` script that will implement the more complex PGM
+that allows multiple timepoints.
+
+
+Other things to note
+--------------------
+
+If your CSV file is poluted with Windows-style line-endings, you can change that
+with:
+
+    tr '\r' '\n' < offending.csv > clean.csv
+
 [1]: http://www.nature.com/nbt/journal/v29/n6/full/nbt.1856.html
