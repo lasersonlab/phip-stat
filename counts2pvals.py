@@ -15,6 +15,8 @@ args = argparser.parse_args()
 inhandle = open(args.input,'r')
 outhandle = open(args.output,'w')
 
+lt1 = 1. - np.finfo(np.float64).epsneg
+
 def GP_lambda_likelihood(counts):
     # compute inputs to likelihood function
     (nx,x) = np.histogram(counts,bins=range(max(counts)+2))
@@ -89,9 +91,9 @@ for i in xrange(output_counts.shape[1]):    # for each output column...
             continue
         
         idxs[-1].append(input_value)
-        lambd = sp.optimize.brentq(H, 0., 1.)
+        lambd = sp.optimize.brentq(H, 0., lt1)
         lambdas[-1].append( lambd )
-    
+        
         # compute theta
         n = len(curr_counts)
         x_bar = sum(curr_counts) / float(n)
