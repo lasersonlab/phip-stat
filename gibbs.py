@@ -682,11 +682,17 @@ if __name__ == '__main__':
     ws = np.asarray(ws)
     median_w = np.median(ws[-1000:, :],  axis=0)
     mean_w = np.mean(ws[-1000:, :],  axis=0)
+    std_w = np.std(ws[-1000:, :], axis=0)
+    p5_w  = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 5)
+    p95_w = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 95)
 
     # write results to disk
     msg("Writing w values to disk...")
     df['w'] = median_w
-    df.to_csv(os.path.join(output_dir, output_file), index=False, cols=['clone', 'w'])
+    df['std_w'] = std_w
+    df['p5_w'] = p5_w
+    df['p95_w'] = p95_w
+    df.to_csv(os.path.join(output_dir, output_file), index=False, cols=['clone', 'w', 'p5_w', 'p95_w', 'std_w'])
     msg("finished\n")
 
     # GENERATE FIGURES (verbose output)
