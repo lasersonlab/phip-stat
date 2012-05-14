@@ -65,7 +65,7 @@ for line in inhandle:
     output_counts.append( np.int_(data[2:]) )
 
 input_counts = np.asarray(input_counts)
-output_counts = np.asarray(output_counts)
+output_counts = np.asarray(output_counts) + 1   # pseudocounts to combat negative regressed theta
 uniq_input_values = list(set(input_counts))
 sys.stderr.write("Num clones: %s\nInput vec shape: %s\nOutput array shape: %s\n" % (len(clones),input_counts.shape,output_counts.shape)); sys.stderr.flush()
 
