@@ -621,7 +621,7 @@ if __name__ == '__main__':
     # define the model
     msg("Defining model...")
     if args.prior == 'lognormal':
-        model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=2)
+        model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
         if args.truth:
             (w_truth, theta_truth, X) = model.generate_truth()
             model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
