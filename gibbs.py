@@ -286,11 +286,11 @@ class GibbsSamplingAnalysis(object):
         self.updates = np.sum(self.diffs_log10ws != 0, axis=1)
         self.dirichlet_weights = np.sum(self.ws * Z * alpha, axis=1)
         self.percentiles_at_1 = [sp.stats.percentileofscore(self.ws[-500:, i], 1) for i in range(self.N)]
-        self.p5  = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 5)
-        self.p25 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 25)
-        self.p50 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 50)
-        self.p75 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 75)
-        self.p95 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws)), 95)
+        self.p5  = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 5)
+        self.p25 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 25)
+        self.p50 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 50)
+        self.p75 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 75)
+        self.p95 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 95)
         self.iter_norm = mpl.colors.normalize(0, len(self.ws) - 1)
 
     def loglikelihoods(self, output_dir=None):
