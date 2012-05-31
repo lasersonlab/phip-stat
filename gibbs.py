@@ -265,7 +265,7 @@ class GibbsSamplingAnalysis(object):
         self.iterations = iterations
         self.N = len(X)
         self.n = sum(X)
-        self.ws = np.asarray(ws)
+        self.ws = centered_matrix(np.asarray(ws))
         self.thetas = np.asarray(thetas)
         self.llws = llws
         self.llths = llths
@@ -286,11 +286,11 @@ class GibbsSamplingAnalysis(object):
         self.updates = np.sum(self.diffs_log10ws != 0, axis=1)
         self.dirichlet_weights = np.sum(self.ws * Z * alpha, axis=1)
         self.percentiles_at_1 = [sp.stats.percentileofscore(self.ws[-500:, i], 1) for i in range(self.N)]
-        self.p5  = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 5)
-        self.p25 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 25)
-        self.p50 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 50)
-        self.p75 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 75)
-        self.p95 = sp.stats.scoreatpercentile(log10(centered_matrix(self.ws[-1000:, :])), 95)
+        self.p5  = sp.stats.scoreatpercentile(log10(self.ws[-1000:, :]), 5)
+        self.p25 = sp.stats.scoreatpercentile(log10(self.ws[-1000:, :]), 25)
+        self.p50 = sp.stats.scoreatpercentile(log10(self.ws[-1000:, :]), 50)
+        self.p75 = sp.stats.scoreatpercentile(log10(self.ws[-1000:, :]), 75)
+        self.p95 = sp.stats.scoreatpercentile(log10(self.ws[-1000:, :]), 95)
         self.iter_norm = mpl.colors.normalize(0, len(self.ws) - 1)
 
     def loglikelihoods(self, output_dir=None):
@@ -679,12 +679,12 @@ if __name__ == '__main__':
 
     msg("\n...finished\n")
 
-    ws = np.asarray(ws)
+    ws = centered_matrix(np.asarray(ws))
     median_w = np.median(ws[-1000:, :],  axis=0)
     mean_w = np.mean(ws[-1000:, :],  axis=0)
     std_w = np.std(ws[-1000:, :], axis=0)
-    p5_w  = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 5)
-    p95_w = sp.stats.scoreatpercentile(log10(centered_matrix(ws)), 95)
+    p5_w  = sp.stats.scoreatpercentile(log10(ws[-1000:, :]), 5)
+    p95_w = sp.stats.scoreatpercentile(log10(ws[-1000:, :]), 95)
 
     # write results to disk
     msg("Writing w values to disk...")
