@@ -91,7 +91,7 @@ class LogNormalFitnessNetwork(FitnessNetwork):
         # returns fraction of accepted moves
 
         # precompute random variates
-        r = np.random.normal(0, 0.1, self.N)
+        r = np.random.normal(0, 0.05, self.N)
         w_star = w * np.exp(r)
         accept = log(np.random.rand(self.N))  # log of uniform variates for acceptance
 
@@ -266,6 +266,7 @@ class GibbsSamplingAnalysis(object):
         self.N = len(X)
         self.n = sum(X)
         self.ws = centered_matrix(np.asarray(ws))
+        # self.ws = np.asarray(ws)
         self.thetas = np.asarray(thetas)
         self.llws = llws
         self.llths = llths
@@ -292,6 +293,12 @@ class GibbsSamplingAnalysis(object):
         self.p75 = sp.stats.scoreatpercentile(log10(self.ws[-1000:, :]), 75)
         self.p95 = sp.stats.scoreatpercentile(log10(self.ws[-1000:, :]), 95)
         self.iter_norm = mpl.colors.normalize(0, len(self.ws) - 1)
+        self.positive = self.X > 0
+        self.zero = self.X == 0
+        self.weights = self.Z + self.X
+        self.intervals = self.p95 - self.p5
+        self.order_by_interval = np.argsort(self.intervals)
+        self.order_by_weight = np.argsort(self.weights)
 
     def loglikelihoods(self, output_dir=None):
         fig = plt.figure()
@@ -348,6 +355,32 @@ class GibbsSamplingAnalysis(object):
         ax.set_xlabel('w component (small to big)')
         ax.set_ylabel('w value')
         show(fig, output_dir, 'w_distributions_ordered_by_input.png')
+    
+    def w_distributions_ordered_by_interval(self, output_dir=None):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(range(self.N), self.p5[self.order_by_interval],  s=5, c='k', lw=0, zorder=1)
+        ax.scatter(range(self.N), self.p95[self.order_by_interval], s=5, c='k', lw=0, zorder=1)
+        for (pos, low, high) in zip(range(self.N), self.p25[self.order_by_interval], self.p75[self.order_by_interval]):
+            ax.plot([pos, pos], [low, high], color='#bdbdbd', lw=2, zorder=2)
+        ax.scatter(range(self.N), self.p50[self.order_by_interval], s=10, c='r', linewidths=0, zorder=3)
+        ax.axhline(0, zorder=0)
+        ax.set_xlabel('w component (small to big)')
+        ax.set_ylabel('w value')
+        show(fig, output_dir, 'w_distributions_ordered_by_interval.png')
+    
+    def w_distributions_ordered_by_weight(self, output_dir=None):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(range(self.N), self.p5[self.order_by_weight],  s=5, c='k', lw=0, zorder=1)
+        ax.scatter(range(self.N), self.p95[self.order_by_weight], s=5, c='k', lw=0, zorder=1)
+        for (pos, low, high) in zip(range(self.N), self.p25[self.order_by_weight], self.p75[self.order_by_weight]):
+            ax.plot([pos, pos], [low, high], color='#bdbdbd', lw=2, zorder=2)
+        ax.scatter(range(self.N), self.p50[self.order_by_weight], s=10, c='r', linewidths=0, zorder=3)
+        ax.axhline(0, zorder=0)
+        ax.set_xlabel('w component (small to big)')
+        ax.set_ylabel('w value')
+        show(fig, output_dir, 'w_distributions_ordered_by_weight.png')
 
     def ranked_stds(self, output_dir=None):
         fig = plt.figure()
@@ -485,6 +518,17 @@ class GibbsSamplingAnalysis(object):
 
         show(fig, output_dir, 'generated_data.png')
 
+    def weights_vs_intervals(self, output_dir=None):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(log10(self.weights[self.positive]), self.intervals[self.positive], marker='o', c=log10(self.medians[self.positive]), cmap=mpl.cm.RdBu, vmin=-self.extreme_log10_w, vmax=self.extreme_log10_w, s=25, lw=0.5, clip_on=False, zorder=10)
+        ax.scatter(log10(self.weights[self.zero]),     self.intervals[self.zero],     marker='s', c=log10(self.medians[self.zero]), cmap=mpl.cm.RdBu, vmin=-self.extreme_log10_w, vmax=self.extreme_log10_w, s=35, lw=0.5, clip_on=False, zorder=12)
+        bar = fig.colorbar(ax.collections[0])
+        ax.set_xlabel("input+1 + output")
+        ax.set_ylabel("p95 - p5")
+        bar.set_label('log10(median w)')
+        show(fig, output_dir, 'weights_vs_intervals.png')
+
 
 class GibbsSamplingAnalysis_with_truth(GibbsSamplingAnalysis):
     """Provide many plots from the output of Gibbs sampling"""
@@ -621,10 +665,10 @@ if __name__ == '__main__':
     # define the model
     msg("Defining model...")
     if args.prior == 'lognormal':
-        model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
+        model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.5)
         if args.truth:
             (w_truth, theta_truth, X) = model.generate_truth()
-            model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.)
+            model = LogNormalFitnessNetwork(Z=Z, X=X, mu=0., sigma=1.5)
     elif args.prior == 'pareto':
         model = ParetoFitnessNetwork(Z=Z, X=X, t=1.5)
         if args.truth:
@@ -681,8 +725,8 @@ if __name__ == '__main__':
 
     ws = centered_matrix(np.asarray(ws))
     median_w = np.median(ws[-1000:, :],  axis=0)
-    mean_w = np.mean(ws[-1000:, :],  axis=0)
-    std_w = np.std(ws[-1000:, :], axis=0)
+    mean_w = 10 ** np.mean(log10(ws[-1000:, :]),  axis=0)
+    std_w = np.std(log10(ws[-1000:, :]), axis=0)
     p5_w  = sp.stats.scoreatpercentile(log10(ws[-1000:, :]), 5)
     p95_w = sp.stats.scoreatpercentile(log10(ws[-1000:, :]), 95)
 
@@ -710,6 +754,7 @@ if __name__ == '__main__':
         plots.ranked_ws(output_dir)
         plots.w_distributions_ordered_by_medians(output_dir)
         plots.w_distributions_ordered_by_input(output_dir)
+        plots.w_distributions_ordered_by_interval(output_dir)
         plots.ranked_stds(output_dir)
         plots.dirichlet_weights_trajectory(output_dir)
         plots.evolution_w_hist(output_dir)
@@ -724,6 +769,8 @@ if __name__ == '__main__':
         plots.num_updates_vs_std_w(output_dir)
         plots.median_w_vs_std_w(output_dir)
         plots.simulated_data(output_dir)
+        plots.weights_vs_intervals(output_dir)
+        plots.w_distributions_ordered_by_weight(output_dir)
 
         if args.truth:
             plots.w_truth_vs_median_w(output_dir)
