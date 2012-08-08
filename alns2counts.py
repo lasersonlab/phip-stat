@@ -33,7 +33,7 @@ for infilename in glob.glob(os.path.join(input_dir,'*.aln')):
     with open(infilename,'r') as ip:
         for line in ip:
             ref_clone = line.split('\t')[2].strip()
-            counts[basename][ref_clone] = counts.get(ref_clone,0) + 1
+            counts[basename][ref_clone] = counts[basename].get(ref_clone,0) + 1
 
 # output counts
 with open(output_file,'w') as op:
