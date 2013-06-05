@@ -1,8 +1,10 @@
 #! /usr/bin/env python
 
 import os
-import argparse
+import sys
 import glob
+import argparse
+
 
 argparser = argparse.ArgumentParser(description=None)
 argparser.add_argument('-i','--input',required=True)
@@ -26,6 +28,8 @@ with open(reference_count_file,'r') as ip:
 
 # generate count dict
 for infilename in glob.glob(os.path.join(input_dir,'*.aln')):
+    sys.stdout.write("%s\n" % infilename)
+    sys.stdout.flush()
     counts = {}
     sample = '.'.join(os.path.basename(infilename).split('.')[:-1])
     with open(infilename,'r') as ip:
