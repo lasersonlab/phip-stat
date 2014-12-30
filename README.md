@@ -65,7 +65,7 @@ that allows multiple timepoints.
 Other things to note
 --------------------
 
-If your CSV file is poluted with Windows-style line-endings, you can change that
+If your CSV file is polluted with Windows-style line-endings, you can change that
 with:
 
     tr '\r' '\n' < offending.csv > clean.csv
