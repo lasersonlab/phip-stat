@@ -67,7 +67,7 @@ def split_fastq(input, output, chunk_size):
 @option('-i', '--input', help='input path (directory of fastq parts)')
 @option('-o', '--output', help='output path (directory)')
 @option('-x', '--index', help='bowtie index path')
-@option('-b', '--batch-submit',
+@option('-b', '--batch-submit', default='',
         help='batch submit command to prefix bowtie command invocation')
 def align_parts(input, output, index, batch_submit):
     """align fastq files to peptide reference"""
@@ -267,4 +267,4 @@ def merge_columns(input, output, position):
                 assert fields_array[0][0] == fields[0]
             merged_fields = ([fields_array[0][0]] +
                              [f[position] for f in fields_array])
-            print('\t'.join(merged_fields, file=op)
+            print('\t'.join(merged_fields), file=op)
