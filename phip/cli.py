@@ -37,9 +37,10 @@ def cli():
 
 
 @cli.command(name='split-fastq')
-@option('-i', '--input', help='input path (fastq file)')
-@option('-o', '--output', help='output path (directory)')
-@option('-n', '--chunk-size', type=int, help='number of reads per chunk')
+@option('-i', '--input', required=True, help='input path (fastq file)')
+@option('-o', '--output', required=True, help='output path (directory)')
+@option('-n', '--chunk-size', type=int, required=True,
+        help='number of reads per chunk')
 def split_fastq(input, output, chunk_size):
     """split fastq files into smaller chunks"""
     input_file = osp.abspath(input)
@@ -64,9 +65,12 @@ def split_fastq(input, output, chunk_size):
 
 
 @cli.command(name='align-parts')
-@option('-i', '--input', help='input path (directory of fastq parts)')
-@option('-o', '--output', help='output path (directory)')
-@option('-x', '--index', help='bowtie index path')
+@option('-i', '--input', required=True,
+        help='input path (directory of fastq parts)')
+@option('-o', '--output', required=True,
+        help='output path (directory)')
+@option('-x', '--index', required=True,
+        help='bowtie index path')
 @option('-b', '--batch-submit', default='',
         help='batch submit command to prefix bowtie command invocation')
 def align_parts(input, output, index, batch_submit):
@@ -91,9 +95,11 @@ def align_parts(input, output, index, batch_submit):
 
 
 @cli.command(name='groupby-sample')
-@option('-i', '--input', help='input path (directory of aln parts)')
-@option('-o', '--output', help='output path (directory)')
-@option('-m', '--mapping', help='barcode to sample mapping (tab-delim)')
+@option('-i', '--input', required=True,
+        help='input path (directory of aln parts)')
+@option('-o', '--output', required=True, help='output path (directory)')
+@option('-m', '--mapping', required=True,
+        help='barcode to sample mapping (tab-delim)')
 def groupby_sample(input, output, mapping):
     """group alignments by sample"""
     input_dir = osp.abspath(input)
@@ -130,9 +136,10 @@ def groupby_sample(input, output, mapping):
 
 
 @cli.command(name='compute-counts')
-@option('-i', '--input', help='input path (directory of aln files)')
-@option('-o', '--output', help='output path (directory)')
-@option('-r', '--reference',
+@option('-i', '--input', required=True,
+        help='input path (directory of aln files)')
+@option('-o', '--output', required=True, help='output path (directory)')
+@option('-r', '--reference', required=True,
         help='path to reference (input) counts file (tab-delim)')
 def compute_counts(input, output, reference):
     """compute counts from aligned bam file"""
@@ -171,8 +178,8 @@ def compute_counts(input, output, reference):
 
 
 @cli.command(name='compute-pvals')
-@option('-i', '--input', help='input path')
-@option('-o', '--output', help='output path')
+@option('-i', '--input', required=True, help='input path')
+@option('-o', '--output', required=True, help='output path')
 @option('-b', '--batch-submit',
         help='batch submit command to prefix pval command invocation')
 def compute_pvals(input, output, batch_submit):
@@ -239,8 +246,9 @@ def compute_pvals(input, output, batch_submit):
 
 
 @cli.command(name='merge-columns')
-@option('-i', '--input', help='input path (directory of tab-delim files)')
-@option('-o', '--output', help='output path')
+@option('-i', '--input', required=True,
+        help='input path (directory of tab-delim files)')
+@option('-o', '--output', required=True, help='output path')
 @option('-p', '--position', type=int, default=1,
         help='the field position to merge')
 def merge_columns(input, output, position):
