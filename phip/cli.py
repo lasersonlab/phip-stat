@@ -70,7 +70,7 @@ def split_fastq(input, output, chunk_size):
 @option('-o', '--output', required=True,
         help='output path (directory)')
 @option('-x', '--index', required=True,
-        help='bowtie index path')
+        help='bowtie index (e.g., as specified to bowtie2)')
 @option('-b', '--batch-submit', default='',
         help='batch submit command to prefix bowtie command invocation')
 def align_parts(input, output, index, batch_submit):
@@ -79,18 +79,17 @@ def align_parts(input, output, index, batch_submit):
     output_dir = osp.abspath(output)
     os.makedirs(output_dir, mode=0o755)
     bowtie_cmd_template = (
-        'BOWTIE_INDEXES={index_dir} bowtie -n 3 -l 100 --best --nomaqround '
-        '--norc -k 1 --quiet {index_name} {input} {output}')
+        'bowtie -n 3 -l 100 --best --nomaqround --norc -k 1 --quiet {index} '
+        '{input} {output}')
     for input_file in glob(pjoin(input_dir, '*.fastq')):
         output_file = pjoin(output_dir,
                             osp.splitext(osp.basename(input_file))[0] + '.aln')
-        bowtie_cmd = bowtie_cmd_template.format(index_dir=osp.dirname(index),
-                                                index_name=osp.basename(index),
+        bowtie_cmd = bowtie_cmd_template.format(index=index,
                                                 input=input_file,
                                                 output=output_file)
-        submit_cmd = '{batch_cmd} "{app_cmd}"'.format(batch_cmd=batch_submit,
-                                                      app_cmd=bowtie_cmd)
-        p = Popen(submit_cmd, shell=True, stdout=PIPE)
+        submit_cmd = '{batch_cmd} {app_cmd}'.format(batch_cmd=batch_submit,
+                                                    app_cmd=bowtie_cmd)
+        p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE)
         print(p.communicate()[0])
 
 
@@ -151,6 +150,8 @@ def compute_counts(input, output, reference):
     ref_names = []
     ref_counts = []
     with open(reference, 'r') as ip:
+        # burn header
+        _ = next(ip)
         for line in ip:
             fields = line.split('\t')
             ref_names.append(fields[0].strip())
@@ -170,7 +171,7 @@ def compute_counts(input, output, reference):
         # write counts
         output_file = pjoin(output_dir, sample + '.tsv')
         with open(output_file, 'w') as op:
-            print('# ref_clone\tref_input\t{0}'.format(sample), file=op)
+            print('id\tinput\t{0}'.format(sample), file=op)
             for (ref_name, ref_count) in zip(ref_names, ref_counts):
                 record = '{0}\t{1}\t{2}'.format(
                     ref_name, ref_count, counts.get(ref_name, 0))
@@ -195,9 +196,9 @@ def compute_pvals(input, output, batch_submit):
             output_file = pjoin(output_dir, '{0}.pvals.tsv'.format(sample))
             pval_cmd = pval_cmd_template.format(
                 input=input_file, output=output_file)
-            submit_cmd = '{batch_cmd} "{app_cmd}"'.format(
+            submit_cmd = '{batch_cmd} {app_cmd}'.format(
                 batch_cmd=batch_submit, app_cmd=pval_cmd)
-            p = Popen(submit_cmd, shell=True, stdout=PIPE)
+            p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE)
             print(p.communicate()[0])
     else:
         # actually compute p-vals on single file
