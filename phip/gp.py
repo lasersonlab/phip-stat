@@ -16,6 +16,10 @@
 
 from __future__ import print_function
 
+import sys
+if sys.version_info[0] == 2:
+    range = xrange
+
 import numpy as np
 import scipy as sp
 import scipy.optimize
@@ -50,14 +54,14 @@ def log_GP_sf(x, theta, lambd):
     extensions = 20
     start = x + 1
     end = x + 100
-    pmf = [log_GP_pmf(y, theta, lambd) for y in xrange(start, end)]
+    pmf = [log_GP_pmf(y, theta, lambd) for y in range(start, end)]
     while extensions > 0:
         accum = np.logaddexp.accumulate(pmf)
         if accum[-1] == accum[-2]:
             return accum[-1]
         start = end
         end += 100
-        pmf += [log_GP_pmf(y, theta, lambd) for y in xrange(start, end)]
+        pmf += [log_GP_pmf(y, theta, lambd) for y in range(start, end)]
         extensions -= 1
     return np.nan
 
@@ -106,6 +110,8 @@ def lambda_theta_regression(lambdas, thetas, idxs):
 
 
 def precompute_pvals(lambda_fits, theta_fits, uniq_combos):
+    total_combos = sum([len(s) for s in uniq_combos])
+    print('Total p-vals to compute: {0}'.format(total_combos), file=sys.stderr)
     log10pval_hash = {}
     j = 0
     for (i, u) in enumerate(uniq_combos):
@@ -116,3 +122,4 @@ def precompute_pvals(lambda_fits, theta_fits, uniq_combos):
             log_pval = log_GP_sf(oc, theta_fits[i](ic), lambda_fits[i](ic))
             log10pval_hash[(i, ic, oc)] = log_pval * np.log10( np.e ) * -1.
             j += 1
+    return log10pval_hash

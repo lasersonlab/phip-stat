@@ -24,6 +24,7 @@ if sys.version_info[0] == 2:
     from itertools import izip as zip
 
 from click import group, command, option
+import numpy as np
 from Bio import SeqIO
 
 from phip.gp import (
@@ -89,7 +90,8 @@ def align_parts(input, output, index, batch_submit):
                                                 output=output_file)
         submit_cmd = '{batch_cmd} {app_cmd}'.format(batch_cmd=batch_submit,
                                                     app_cmd=bowtie_cmd)
-        p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE)
+        p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
+                  universal_newlines=True)
         print(p.communicate()[0])
 
 
@@ -190,7 +192,7 @@ def compute_pvals(input, output, batch_submit):
         input_dir = osp.abspath(input)
         output_dir = osp.abspath(output)
         os.makedirs(output_dir, mode=0o755)
-        pval_cmd_template = 'phip comput-pvals -i {input} -o {output}'
+        pval_cmd_template = 'phip compute-pvals -i {input} -o {output}'
         for input_file in glob(pjoin(input_dir, '*.tsv')):
             sample = osp.splitext(osp.basename(input_file))[0]
             output_file = pjoin(output_dir, '{0}.pvals.tsv'.format(sample))
@@ -198,7 +200,8 @@ def compute_pvals(input, output, batch_submit):
                 input=input_file, output=output_file)
             submit_cmd = '{batch_cmd} {app_cmd}'.format(
                 batch_cmd=batch_submit, app_cmd=pval_cmd)
-            p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE)
+            p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
+                      universal_newlines=True)
             print(p.communicate()[0])
     else:
         # actually compute p-vals on single file
@@ -206,12 +209,13 @@ def compute_pvals(input, output, batch_submit):
         input_file = osp.abspath(input)
         output_file = osp.abspath(output)
         clones = []
+        samples = None
         input_counts = []
         output_counts = []
         with open(input_file, 'r') as ip:
+            header_fields = next(ip).split('\t')
+            samples = [f.strip() for f in header_fields[2:]]
             for line in ip:
-                if line.startswith('#'):
-                    continue
                 fields = line.split('\t')
                 clones.append(fields[0].strip())
                 input_counts.append(int(fields[1]))
@@ -239,6 +243,8 @@ def compute_pvals(input, output, batch_submit):
 
         # Compute p-values for each clone using regressed GP parameters
         with open(output_file, 'w') as op:
+            header = '\t'.join(['id'] + samples)
+            print(header, file=op)
             for (clone, ic, ocs) in zip(clones, input_counts, output_counts):
                 fields = [clone]
                 for (i, oc) in enumerate(ocs):
@@ -262,13 +268,8 @@ def merge_columns(input, output, position):
     file_headers = [osp.splitext(osp.basename(f))[0] for f in input_files]
 
     with open(output_file, 'w') as op:
-        # write header
-        print('\t'.join([''] + file_headers), file=op)
         # iterate through lines
         for lines in zip(*file_iterators):
-            # ignore comment header lines; only checks first file
-            if lines[0].startswith('#'):
-                continue
             fields_array = [[field.strip() for field in line.split('\t')]
                             for line in lines]
             # check that join column is the same
