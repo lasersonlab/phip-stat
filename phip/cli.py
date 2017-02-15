@@ -65,13 +65,9 @@ def join_barcodes(input, barcodes, output):
     op = open(output_file, 'w')
     for read, barcode in zip(i_it, b_it):
         assert read.description == barcode.description
-        parts = read.description.split()
-        assert len(parts) == 2
-        subparts = parts[1].split(':')
-        assert len(subparts) == 4
-        subparts[3] = str(barcode.seq)
-        new_description = ' '.join([parts[0], ':'.join(subparts)])
-        read.description = new_description
+        parts = read.description.rsplit(':', maxsplit=1)
+        parts[1] = str(barcode.seq)
+        read.description = ':'.join(parts)
         op.write(read.format('fastq'))
     if not op.closed:
         op.close()
