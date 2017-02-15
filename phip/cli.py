@@ -36,6 +36,46 @@ def cli():
     """phip -- PhIP-seq analysis tools"""
     pass
 
+@cli.command(name='join-barcodes')
+@option('-i', '--input', required=True, help='reads fastq file')
+@option('-b', '--barcodes', required=True, help='barcodes fastq file')
+@option('-o', '--output', required=True, help='output fastq file')
+def join_barcodes(input, barcodes, output):
+    """annotate Illumina reads with barcodes
+
+    Some older versions of the Illumina pipeline would not annotate the reads
+    their corresponding barcodes, but would leave the barcode reads in a
+    separate fastq file. This tool will take both fastq files and will modify
+    the main reads to add the barcode to the header line (in the same place
+    Illumina would put it).
+
+    This should only be necessary on older data files. Newer pipelines that use
+    bcl2fastq2 or the "generate fastq" pipeline in Basespace (starting 9/2016)
+    should not require this.
+
+    This tool assumes that the reads are presented in the same order in the two
+    input files.
+    """
+    input_file = osp.abspath(input)
+    barcodes_file = osp.abspath(barcodes)
+    output_file = osp.abspath(output)
+
+    i_it = SeqIO.parse(input_file, 'fastq')
+    b_it = SeqIO.parse(barcodes_file, 'fastq')
+    op = open(output_file, 'w')
+    for read, barcode in zip(i_it, b_it):
+        assert read.description == barcode.description
+        parts = read.description.split()
+        assert len(parts) == 2
+        subparts = parts[1].split(':')
+        assert len(subparts) == 4
+        subparts[3] = str(barcode.seq)
+        new_description = ' '.join([parts[0], ':'.join(subparts)])
+        read.description = new_description
+        op.write(read.format('fastq'))
+    if not op.closed:
+        op.close()
+
 
 @cli.command(name='split-fastq')
 @option('-i', '--input', required=True, help='input path (fastq file)')
