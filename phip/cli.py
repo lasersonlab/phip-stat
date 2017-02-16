@@ -151,7 +151,7 @@ def groupby_sample(input, output, mapping):
         alphabet = set(['A', 'C', 'G', 'T', 'N'])
         for i in range(len(seq)):
             for alt in alphabet - set([seq[i].upper()]):
-                yield s[:i] + alt + s[i + 1:]
+                yield seq[:i] + alt + seq[i + 1:]
 
     # load sample mapping and open output handles
     bc2sample = {}
