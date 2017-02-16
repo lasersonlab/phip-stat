@@ -26,6 +26,7 @@ if sys.version_info[0] == 2:
 from click import group, command, option
 import numpy as np
 from Bio import SeqIO
+from Bio.SeqIO.QualityIO import FastqGeneralIterator
 
 from phip.gp import (
     estimate_GP_distributions, lambda_theta_regression, precompute_pvals)
@@ -35,6 +36,7 @@ from phip.gp import (
 def cli():
     """phip -- PhIP-seq analysis tools"""
     pass
+
 
 @cli.command(name='join-barcodes')
 @option('-i', '--input', required=True, help='reads fastq file')
@@ -56,21 +58,19 @@ def join_barcodes(input, barcodes, output):
     This tool assumes that the reads are presented in the same order in the two
     input files.
     """
-    input_file = osp.abspath(input)
-    barcodes_file = osp.abspath(barcodes)
-    output_file = osp.abspath(output)
-
-    i_it = SeqIO.parse(input_file, 'fastq')
-    b_it = SeqIO.parse(barcodes_file, 'fastq')
-    op = open(output_file, 'w')
-    for read, barcode in zip(i_it, b_it):
-        assert read.description == barcode.description
-        parts = read.description.rsplit(':', maxsplit=1)
-        parts[1] = str(barcode.seq)
-        read.description = ':'.join(parts)
-        op.write(read.format('fastq'))
-    if not op.closed:
-        op.close()
+    r_f = osp.abspath(input)
+    b_f = osp.abspath(barcodes)
+    o_f = osp.abspath(output)
+    fastq_template = '@{0}\n{1}\n+\n{2}\n'.format
+    with open(r_f, 'r') as r_h, open(b_f, 'r') as b_h, open(o_f, 'w') as o_h:
+        r_it = FastqGeneralIterator(r_h)
+        b_it = FastqGeneralIterator(b_h)
+        o_write = o_h.write
+        for read, barcode in zip(r_it, b_it):
+            assert read[0] == barcode[0]
+            parts = read[0].rsplit(':', maxsplit=1)
+            parts[1] = str(barcode[1])
+            o_write(fastq_template(':'.join(parts), read[1], read[2]))
 
 
 @cli.command(name='split-fastq')
