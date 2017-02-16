@@ -84,21 +84,25 @@ def split_fastq(input, output, chunk_size):
     output_dir = osp.abspath(output)
     os.makedirs(output_dir, mode=0o755)
 
-    num_processed = 0
-    file_num = 1
-    output_file = pjoin(output_dir, 'part.{0}.fastq'.format(file_num))
-    for record in SeqIO.parse(input_file, 'fastq'):
-        if num_processed == 0:
-            op = open(output_file, 'w')
-        op.write(record.format('fastq'))
-        num_processed += 1
-        if num_processed == chunk_size:
+    # convenience functions
+    output_file = lambda i: pjoin(output_dir, 'part.{0}.fastq'.format(i))
+    fastq_template = '@{0}\n{1}\n+\n{2}\n'.format
+
+    with open(input_file, 'r') as input_handle:
+        num_processed = 0
+        file_num = 1
+        for record in FastqGeneralIterator(input_handle):
+            if num_processed == 0:
+                op = open(output_file(file_num), 'w')
+                write = op.write
+            write(fastq_template(*record))
+            num_processed += 1
+            if num_processed == chunk_size:
+                op.close()
+                num_processed = 0
+                file_num += 1
+        if not op.closed:
             op.close()
-            num_processed = 0
-            file_num += 1
-            output_file = pjoin(output_dir, 'part.{0}.fastq'.format(file_num))
-    if not op.closed:
-        op.close()
 
 
 @cli.command(name='align-parts')
