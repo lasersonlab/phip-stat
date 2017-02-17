@@ -297,7 +297,7 @@ def compute_pvals(input, output, batch_submit):
         help='input path (directory of tab-delim files)')
 @option('-o', '--output', required=True, help='output path')
 @option('-p', '--position', type=int, default=1,
-        help='the field position to merge')
+        help='the field position to merge (0-indexed)')
 def merge_columns(input, output, position):
     """merge tab-delim files"""
     input_dir = os.path.abspath(input)
