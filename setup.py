@@ -20,7 +20,7 @@ def readme():
 
 setup(
     name='phip-stat',
-    version='0.3.0.dev0',
+    version='0.3.0',
     description='PhIP-seq analysis tools',
     long_description=readme(),
     url='https://github.com/lasersonlab/phip-stat',
