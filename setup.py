@@ -27,7 +27,7 @@ setup(
     author='Laserson Lab',
     license='Apache License, Version 2.0',
     classifiers=['Programming Language :: Python :: 2.6',
-                 'Programming Language :: Python :: 2.7'
+                 'Programming Language :: Python :: 2.7',
                  'Programming Language :: Python :: 3'],
     packages=find_packages(),
     install_requires=['click', 'biopython', 'numpy', 'scipy'],
