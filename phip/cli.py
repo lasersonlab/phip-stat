@@ -114,20 +114,23 @@ def split_fastq(input, output, chunk_size):
         help='bowtie index (e.g., as specified to bowtie2)')
 @option('-b', '--batch-submit', default='',
         help='batch submit command to prefix bowtie command invocation')
-def align_parts(input, output, index, batch_submit):
+@option('-p', '--threads', default=1,
+        help='Number of threads to specify for each invocation of bowtie')
+def align_parts(input, output, index, batch_submit, threads):
     """align fastq files to peptide reference"""
     input_dir = osp.abspath(input)
     output_dir = osp.abspath(output)
     os.makedirs(output_dir, mode=0o755)
     bowtie_cmd_template = (
-        'bowtie -n 3 -l 100 --best --nomaqround --norc -k 1 --quiet {index} '
-        '{input} {output}')
+        'bowtie -n 3 -l 100 --best --nomaqround --norc -k 1 -p {threads} '
+        '--quiet {index} {input} {output}')
     for input_file in glob(pjoin(input_dir, '*.fastq')):
         output_file = pjoin(output_dir,
                             osp.splitext(osp.basename(input_file))[0] + '.aln')
         bowtie_cmd = bowtie_cmd_template.format(index=index,
                                                 input=input_file,
-                                                output=output_file)
+                                                output=output_file,
+                                                threads=threads)
         submit_cmd = '{batch_cmd} {app_cmd}'.format(batch_cmd=batch_submit,
                                                     app_cmd=bowtie_cmd)
         p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
