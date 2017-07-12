@@ -25,6 +25,7 @@ if sys.version_info[0] == 2:
 
 from click import group, command, option
 import numpy as np
+import pandas as pd
 from Bio import SeqIO
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
 
@@ -46,7 +47,7 @@ def join_barcodes(input, barcodes, output):
     """annotate Illumina reads with barcodes
 
     Some older versions of the Illumina pipeline would not annotate the reads
-    their corresponding barcodes, but would leave the barcode reads in a
+    with their corresponding barcodes, but would leave the barcode reads in a
     separate fastq file. This tool will take both fastq files and will modify
     the main reads to add the barcode to the header line (in the same place
     Illumina would put it).
@@ -116,26 +117,35 @@ def split_fastq(input, output, chunk_size):
         help='batch submit command to prefix bowtie command invocation')
 @option('-p', '--threads', default=1,
         help='Number of threads to specify for each invocation of bowtie')
-def align_parts(input, output, index, batch_submit, threads):
+@option('-3', '--trim3', default=0,
+        help='Number of bases to trim off of 3-end (passed to bowtie)')
+@option('-d', '--dry-run', is_flag=True,
+        help='Dry run; print out commands to execute')
+def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
     """align fastq files to peptide reference"""
     input_dir = osp.abspath(input)
     output_dir = osp.abspath(output)
-    os.makedirs(output_dir, mode=0o755)
+    if not dry_run:
+        os.makedirs(output_dir, mode=0o755)
     bowtie_cmd_template = (
         'bowtie -n 3 -l 100 --best --nomaqround --norc -k 1 -p {threads} '
-        '--quiet {index} {input} {output}')
+        '-3 {trim3} --quiet {index} {input} {output}')
     for input_file in glob(pjoin(input_dir, '*.fastq')):
         output_file = pjoin(output_dir,
                             osp.splitext(osp.basename(input_file))[0] + '.aln')
         bowtie_cmd = bowtie_cmd_template.format(index=index,
                                                 input=input_file,
                                                 output=output_file,
-                                                threads=threads)
+                                                threads=threads,
+                                                trim3=trim3)
         submit_cmd = '{batch_cmd} {app_cmd}'.format(batch_cmd=batch_submit,
                                                     app_cmd=bowtie_cmd)
-        p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
-                  universal_newlines=True)
-        print(p.communicate()[0])
+        if dry_run:
+            print(submit_cmd.strip())
+        else:
+            p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
+                      universal_newlines=True)
+            print(p.communicate()[0])
 
 
 @cli.command(name='groupby-sample')
@@ -200,7 +210,7 @@ def compute_counts(input, output, reference):
         for line in ip:
             fields = line.split('\t')
             ref_names.append(fields[0].strip())
-            ref_counts.append(int(fields[1]))
+            ref_counts.append(round(float(fields[1])))
 
     # compute count dicts
     for input_file in glob(pjoin(input_dir, '*.aln')):
@@ -223,18 +233,47 @@ def compute_counts(input, output, reference):
                 print(record, file=op)
 
 
+@cli.command(name='gen-covariates')
+@option('-i', '--input', required=True,
+        help='input path to merged count file')
+@option('-s', '--substring', required=True,
+        help='substring to match against column names')
+@option('-o', '--output', required=True,
+        help='output file (recommend .tsv extension)')
+def gen_covariates(input, substring, output):
+    """compute covariates for input to stat model
+
+    The input (`-i`) should be the merged counts file.  Each column name is
+    matched against the given substring.  The median coverage-normalized value
+    of each row from the matching columns will be output into a tab-delim file.
+    This file can be used as the "reference" values for computing p-values.
+    """
+    input_file = osp.abspath(input)
+    output_file = osp.abspath(output)
+    counts = pd.read_csv(input_file, sep='\t', header=0, index_col=0)
+    matched_columns = [col for col in counts.columns if substring in col]
+    sums = counts[matched_columns].sum()
+    normed = counts[matched_columns] / sums * sums.median()
+    medians = normed.median(axis=1)
+    medians.name = 'input'
+    medians.to_csv(output_file, sep='\t', header=True, index_label='id')
+
+
 @cli.command(name='compute-pvals')
 @option('-i', '--input', required=True, help='input path')
 @option('-o', '--output', required=True, help='output path')
 @option('-b', '--batch-submit',
         help='batch submit command to prefix pval command invocation')
-def compute_pvals(input, output, batch_submit):
+@option('-d', '--dry-run', is_flag=True,
+        help='Dry run; print out commands to execute for batch submit')
+def compute_pvals(input, output, batch_submit, dry_run):
     """compute p-values from counts"""
     if batch_submit is not None:
         # run compute-pvals on each file using batch submit command
         input_dir = osp.abspath(input)
         output_dir = osp.abspath(output)
-        os.makedirs(output_dir, mode=0o755)
+        if not dry_run:
+            os.makedirs(output_dir, mode=0o755)
         pval_cmd_template = 'phip compute-pvals -i {input} -o {output}'
         for input_file in glob(pjoin(input_dir, '*.tsv')):
             sample = osp.splitext(osp.basename(input_file))[0]
@@ -243,9 +282,12 @@ def compute_pvals(input, output, batch_submit):
                 input=input_file, output=output_file)
             submit_cmd = '{batch_cmd} {app_cmd}'.format(
                 batch_cmd=batch_submit, app_cmd=pval_cmd)
-            p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
-                      universal_newlines=True)
-            print(p.communicate()[0])
+            if dry_run:
+                print(submit_cmd.strip())
+            else:
+                p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
+                          universal_newlines=True)
+                print(p.communicate()[0])
     else:
         # actually compute p-vals on single file
         # Load data
