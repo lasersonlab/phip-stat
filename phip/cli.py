@@ -16,6 +16,7 @@ from __future__ import print_function
 
 import os
 import sys
+import gzip
 from os import path as osp
 from os.path import join as pjoin
 from glob import glob
@@ -23,7 +24,7 @@ from subprocess import Popen, PIPE
 if sys.version_info[0] == 2:
     from itertools import izip as zip
 
-from click import group, command, option
+from click import group, command, option, Path
 import numpy as np
 import pandas as pd
 from Bio import SeqIO
@@ -33,45 +34,67 @@ from phip.gp import (
     estimate_GP_distributions, lambda_theta_regression, precompute_pvals)
 
 
+# handle gzipped or uncompressed files
+def open_maybe_compressed(*args, **kwargs):
+    if args[0].endswith('.gz'):
+        # gzip modes are different from default open modes
+        if len(args[1]) == 1:
+            args = (args[0], args[1] + 't') + args[2:]
+        return gzip.open(*args, **kwargs)
+    else:
+        return open(*args, **kwargs)
+
+
 @group(context_settings={'help_option_names': ['-h', '--help']})
 def cli():
     """phip -- PhIP-seq analysis tools"""
     pass
 
 
-@cli.command(name='join-barcodes')
-@option('-i', '--input', required=True, help='reads fastq file')
-@option('-b', '--barcodes', required=True, help='barcodes fastq file')
-@option('-o', '--output', required=True, help='output fastq file')
-def join_barcodes(input, barcodes, output):
-    """annotate Illumina reads with barcodes
+@cli.command(name='zip-reads-and-barcodes')
+@option('-i', '--input', type=Path(exists=True, dir_okay=False), required=True,
+        help='reads fastq file')
+@option('-b', '--barcodes', type=Path(exists=True, dir_okay=False),
+        required=True, help='indexes/barcodes fastq file')
+@option('-m', '--mapping', type=Path(exists=True, dir_okay=False),
+        required=True,
+        help='barcode to sample mapping (tab-delim, no header line)')
+@option('-o', '--output', type=Path(exists=False),
+        required=True, help='output directory')
+@option('-z', '--compress-output', is_flag=True,
+        help='gzip-compress output fastq files')
+def zip_reads_barcodes(input, barcodes, mapping, output, compress_output):
+    """zip reads with barcodes and split into files (UNUSUAL)
 
     Some older versions of the Illumina pipeline would not annotate the reads
     with their corresponding barcodes, but would leave the barcode reads in a
     separate fastq file. This tool will take both fastq files and will modify
-    the main reads to add the barcode to the header line (in the same place
-    Illumina would put it).
+    the main fastq record to add the barcode to the header line (in the same
+    place Illumina would put it). It will the write one file per sample as
+    provided in the mapping.
 
     This should only be necessary on older data files. Newer pipelines that use
     bcl2fastq2 or the "generate fastq" pipeline in Basespace (starting 9/2016)
     should not require this.
 
-    This tool assumes that the reads are presented in the same order in the two
-    input files.
+    This tool requires that the reads are presented in the same order in the
+    two input files (which should be the case).
     """
     r_f = osp.abspath(input)
     b_f = osp.abspath(barcodes)
     o_f = osp.abspath(output)
     fastq_template = '@{0}\n{1}\n+\n{2}\n'.format
-    with open(r_f, 'r') as r_h, open(b_f, 'r') as b_h, open(o_f, 'w') as o_h:
-        r_it = FastqGeneralIterator(r_h)
-        b_it = FastqGeneralIterator(b_h)
-        o_write = o_h.write
-        for read, barcode in zip(r_it, b_it):
-            assert read[0] == barcode[0]
-            parts = read[0].rsplit(':', maxsplit=1)
-            parts[1] = str(barcode[1])
-            o_write(fastq_template(':'.join(parts), read[1], read[2]))
+    with open_maybe_compressed(r_f, 'r') as r_h:
+        with open_maybe_compressed(b_f, 'r') as b_h:
+            with open_maybe_compressed(o_f, 'w') as o_h:
+                r_it = FastqGeneralIterator(r_h)
+                b_it = FastqGeneralIterator(b_h)
+                o_write = o_h.write
+                for read, barcode in zip(r_it, b_it):
+                    assert read[0] == barcode[0]
+                    parts = read[0].rsplit(':', maxsplit=1)
+                    parts[1] = str(barcode[1])
+                    o_write(fastq_template(':'.join(parts), read[1], read[2]))
 
 
 @cli.command(name='split-fastq')
@@ -89,12 +112,12 @@ def split_fastq(input, output, chunk_size):
     output_file = lambda i: pjoin(output_dir, 'part.{0}.fastq'.format(i))
     fastq_template = '@{0}\n{1}\n+\n{2}\n'.format
 
-    with open(input_file, 'r') as input_handle:
+    with open_maybe_compressed(input_file, 'r') as input_handle:
         num_processed = 0
         file_num = 1
         for record in FastqGeneralIterator(input_handle):
             if num_processed == 0:
-                op = open(output_file(file_num), 'w')
+                op = open_maybe_compressed(output_file(file_num), 'w')
                 write = op.write
             write(fastq_template(*record))
             num_processed += 1
@@ -153,7 +176,7 @@ def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
         help='input path (directory of aln parts)')
 @option('-o', '--output', required=True, help='output path (directory)')
 @option('-m', '--mapping', required=True,
-        help='barcode to sample mapping (tab-delim)')
+        help='barcode to sample mapping (tab-delim, no header line)')
 def groupby_sample(input, output, mapping):
     """group alignments by sample"""
     input_dir = osp.abspath(input)
