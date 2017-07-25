@@ -32,6 +32,7 @@ from Bio.SeqIO.QualityIO import FastqGeneralIterator
 
 from phip.gp import (
     estimate_GP_distributions, lambda_theta_regression, precompute_pvals)
+from phip.utils import load_mapping, edit1_mapping
 
 
 # handle gzipped or uncompressed files
@@ -82,19 +83,32 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output):
     """
     r_f = osp.abspath(input)
     b_f = osp.abspath(barcodes)
-    o_f = osp.abspath(output)
-    fastq_template = '@{0}\n{1}\n+\n{2}\n'.format
+    os.makedirs(output, mode=0o755)
     with open_maybe_compressed(r_f, 'r') as r_h:
         with open_maybe_compressed(b_f, 'r') as b_h:
-            with open_maybe_compressed(o_f, 'w') as o_h:
+            # generate all possible edit-1 BCs
+            bc2sample = edit1_mapping(load_mapping(mapping))
+            # open file handles for each sample
+            ext = 'fastq.gz' if compress_output else 'fastq'
+            f = lambda s: pjoin(output, f'{s}.{ext}')
+            output_handles = {s: open_maybe_compressed(f(s), 'w')
+                              for s in bc2sample.values()}
+            try:
                 r_it = FastqGeneralIterator(r_h)
                 b_it = FastqGeneralIterator(b_h)
-                o_write = o_h.write
                 for read, barcode in zip(r_it, b_it):
                     assert read[0] == barcode[0]
-                    parts = read[0].rsplit(':', maxsplit=1)
-                    parts[1] = str(barcode[1])
-                    o_write(fastq_template(':'.join(parts), read[1], read[2]))
+                    title_prefix = read[0].rsplit(':', maxsplit=1)[0]
+                    record = (
+                        '@' + title_prefix + ':' + barcode[1] + '\n' +
+                        read[1] + '\n+\n' + read[2] + '\n')
+                    try:
+                        output_handles[bc2sample[barcode[1]]].write(record)
+                    except KeyError:
+                        continue
+            finally:
+                for h in output_handles.values():
+                    h.close()
 
 
 @cli.command(name='split-fastq')
