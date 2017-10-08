@@ -73,7 +73,7 @@ def gamma_poisson_posterior_rates(counts, alpha, beta, upper_bound):
     # the expression for its expected value.
     masked = np.ma.masked_greater(counts.values, upper_bound)
     trimmed_sums = np.ma.sum(masked, axis=1).data
-    trimmed_sizes = (~masked.mask).sum(axis=1)
+    trimmed_sizes = (~np.ma.getmaskarray(masked)).sum(axis=1)
     return (alpha + trimmed_sums) / (beta + trimmed_sizes)
 
 
@@ -85,7 +85,6 @@ def mlxp_gamma_poisson(counts, rates):
     """
     mlxp = []
     for i in range(counts.shape[0]):
-        # mlxp.append(-sp.stats.poisson.logsf(counts.values[i], rates[i]) / np.log(10))
         mlxp.append(-poisson_logsf(counts.values[i], rates[i]) / np.log(10))
     mlxp = np.asarray(mlxp)
     mlxp = pd.DataFrame(data=mlxp, index=counts.index, columns=counts.columns)
