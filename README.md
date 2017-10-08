@@ -4,13 +4,12 @@ The PhIP-seq assay was first described in [Larman et.
 al.](https://dx.doi.org/10.1038/nbt.1856). This repo contains code for
 processing raw PhIP-seq data into analysis-ready enrichment scores.
 
-The overall flow of the pipeline is to split `.fastq` data into pieces and
-align it against the associated phage library. The alignments are converted to
-counts, which are then converted to scores based on a Generalized Poisson
-regression model.
+The overall flow of the pipeline is for each sample
 
-The tools are implemented in Python and can dispatch jobs to an HPC job
-scheduler such as LSF or Grid Engine.
+1. quantify the number of reads observed for each possible peptide in the phage library (using kallisto), and
+2. convert those values to p-values by fitting to a Gamma-Poisson distribution
+
+An entire NextSeq run with 500M reads can be processed in <30 min on a 4-core laptop.
 
 Please submit [issues](https://github.com/lasersonlab/phip-stat/issues) to
 report any problems.  This code implements the statistical model as described

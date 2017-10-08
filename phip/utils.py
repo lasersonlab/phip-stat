@@ -47,3 +47,14 @@ def edit1_mapping(mapping):
                 raise ValueError(f'{mut} already in dict: BCs are within 1 edit')
             extended_mapping[mut] = mapping[bc]
     return extended_mapping
+
+
+def compute_size_factors(counts):
+    """Compute size factors from Anders and Huber 2010
+
+    counts is a numpy array
+    """
+    import numpy as np
+    masked = np.ma.masked_equal(counts, 0)
+    geom_means = np.ma.exp(np.ma.log(masked).sum(axis=1) / (~masked.mask).sum(axis=1)).data[np.newaxis].T
+    return np.ma.median(masked / geom_means, axis=0).data

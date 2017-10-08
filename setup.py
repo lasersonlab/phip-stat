@@ -30,6 +30,6 @@ setup(
                  'Programming Language :: Python :: 2.7',
                  'Programming Language :: Python :: 3'],
     packages=find_packages(),
-    install_requires=['click', 'biopython', 'numpy', 'scipy'],
+    install_requires=['click', 'tqdm', 'biopython', 'numpy', 'scipy', 'pandas'],
     entry_points={'console_scripts': ['phip = phip.cli:cli']}
 )

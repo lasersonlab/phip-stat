@@ -23,6 +23,7 @@ if sys.version_info[0] == 2:
 import numpy as np
 import scipy as sp
 import scipy.optimize
+from tqdm import tqdm, trange
 
 
 lt1 = 1. - np.finfo(np.float64).epsneg
@@ -44,37 +45,31 @@ def GP_lambda_likelihood(counts):
 
 
 def log_GP_pmf(x, theta, lambd):
-    log = np.log
-    logP = (log(theta) + (x - 1) * log(theta + x * lambd) -
-            (theta + x * lambd) - np.sum(log(np.arange(1, x + 1))))
-    return logP
+    return (np.log(theta) + (x - 1) * np.log(theta + x * lambd) -
+            (theta + x * lambd) - sp.special.gammaln(x + 1))
 
 
 def log_GP_sf(x, theta, lambd):
-    extensions = 20
-    start = x + 1
-    end = x + 100
-    pmf = [log_GP_pmf(y, theta, lambd) for y in range(start, end)]
-    while extensions > 0:
-        accum = np.logaddexp.accumulate(pmf)
-        if accum[-1] == accum[-2]:
-            return accum[-1]
-        start = end
-        end += 100
-        pmf += [log_GP_pmf(y, theta, lambd) for y in range(start, end)]
-        extensions -= 1
-    return np.nan
+    count = x + 1
+    accum = log_GP_pmf(count, theta, lambd)
+    while True:
+        count += 1
+        new = np.logaddexp(accum, log_GP_pmf(count, theta, lambd))
+        if new - accum < 1e-6:
+            break
+        accum = new
+    return accum
 
 
 def estimate_GP_distributions(input_counts, output_counts, uniq_input_values):
     lambdas = []
     thetas = []
     idxs = []
-    for i in range(output_counts.shape[1]):  # for each output column...
+    for i in trange(output_counts.shape[1], desc='GenPois sample estimates'):  # for each output column...
         lambdas.append([])
         thetas.append([])
         idxs.append([])
-        for input_value in uniq_input_values:  # ...compute lambdas/thetas
+        for input_value in tqdm(uniq_input_values, desc='Unique input values'):  # ...compute lambdas/thetas
             # compute lambda
             curr_counts = output_counts[input_counts == input_value, i]
             if len(curr_counts) < 50:
@@ -100,26 +95,35 @@ def estimate_GP_distributions(input_counts, output_counts, uniq_input_values):
 def lambda_theta_regression(lambdas, thetas, idxs):
     lambda_fits = []
     theta_fits = []
-    for i in range(len(lambdas)):
-        lambda_fit = lambda x: np.mean(lambdas[i])
-        coeffs = np.polyfit(idxs[i], thetas[i], 1)
-        theta_fit = lambda x: coeffs[0] * x + coeffs[1]
-        lambda_fits.append(lambda_fit)
-        theta_fits.append(theta_fit)
+    for i in trange(len(lambdas), desc='Parameter regression'):
+        try:
+            lambda_fit = lambda x: np.mean(lambdas[i])
+            coeffs = np.polyfit(idxs[i], thetas[i], 1)
+            theta_fit = lambda x: coeffs[0] * x + coeffs[1]
+            lambda_fits.append(lambda_fit)
+            theta_fits.append(theta_fit)
+        except TypeError:
+            # occurs when failure to get enough values or non-uniqueness in fit
+            lambda_fits.append(None)
+            theta_fits.append(None)
     return (lambda_fits, theta_fits)
 
 
 def precompute_pvals(lambda_fits, theta_fits, uniq_combos):
     total_combos = sum([len(s) for s in uniq_combos])
-    print('Total p-vals to compute: {0}'.format(total_combos), file=sys.stderr)
     log10pval_hash = {}
     j = 0
-    for (i, u) in enumerate(uniq_combos):
-        for (ic, oc) in u:
-            if j % 1000 == 0:
-                print('computed {0} p-vals'.format(j), file=sys.stderr)
-                sys.stderr.flush()
-            log_pval = log_GP_sf(oc, theta_fits[i](ic), lambda_fits[i](ic))
-            log10pval_hash[(i, ic, oc)] = log_pval * np.log10( np.e ) * -1.
-            j += 1
+    with tqdm(desc='Precomputing p-vals', unit='pval', total=total_combos) as pbar:
+        for (i, u) in enumerate(uniq_combos):
+            for (ic, oc) in u:
+                try:
+                    log_pval = log_GP_sf(oc, theta_fits[i](ic), lambda_fits[i](ic))
+                    log10pval_hash[(i, ic, oc)] = log_pval * np.log10( np.e ) * -1.
+                except TypeError:
+                    # occurs when the parameter function is invalid, which
+                    # occurs when lambda_theta_regression can't compute a fit
+                    log10pval_hash[(i, ic, oc)] = -1.
+                j += 1
+                if j % 10 == 0:
+                    pbar.update(10)
     return log10pval_hash
