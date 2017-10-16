@@ -128,7 +128,10 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
         required=True, help='output directory')
 @option('-z', '--compress-output', is_flag=True,
         help='gzip-compress output fastq files')
-def zip_reads_barcodes(input, barcodes, mapping, output, compress_output):
+@option('-n', '--no-wrap', is_flag=True,
+        help='fastq inputs are not wrapped (i.e., 4 lines per record)')
+def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
+                       no_wrap):
     """(RARELY) zip reads with barcodes and split into files
 
     Some older versions of the Illumina pipeline would not annotate the reads
@@ -145,8 +148,12 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output):
     This tool requires that the reads are presented in the same order in the
     two input files (which should be the case).
     """
-    from Bio.SeqIO.QualityIO import FastqGeneralIterator
     from phip.utils import load_mapping, edit1_mapping
+    if no_wrap:
+        from phip.utils import read_fastq_nowrap as fastq_parser
+    else:
+        from phip.utils import readfq as fastq_parser
+    record_template = '@{}:{}\n{}\n+\n{}'
     r_f = osp.abspath(input)
     b_f = osp.abspath(barcodes)
     os.makedirs(output, mode=0o755)
@@ -160,16 +167,16 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output):
             output_handles = {s: open_maybe_compressed(f(s), 'w')
                               for s in bc2sample.values()}
             try:
-                r_it = FastqGeneralIterator(r_h)
-                b_it = FastqGeneralIterator(b_h)
-                for read, barcode in zip(r_it, b_it):
+                r_it = fastq_parser(r_h)
+                b_it = fastq_parser(b_h)
+                for read, barcode in zip(tqdm(r_it), b_it):
                     assert read[0] == barcode[0]
                     title_prefix = read[0].rsplit(':', maxsplit=1)[0]
-                    record = (
-                        '@' + title_prefix + ':' + barcode[1] + '\n' +
-                        read[1] + '\n+\n' + read[2] + '\n')
                     try:
-                        output_handles[bc2sample[barcode[1]]].write(record)
+                        print(
+                            record_template.format(
+                                title_prefix, barcode[1], read[1], read[2]),
+                            file=output_handles[bc2sample[barcode[1]]])
                     except KeyError:
                         continue
             finally:

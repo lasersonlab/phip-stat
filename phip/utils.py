@@ -29,7 +29,7 @@ def load_mapping(path):
     bc2sample = {}
     with open(path, 'r') as ip:
         for line in ip:
-            (bc, sample) = [field.strip() for field in line.split()]
+            (bc, sample) = [field.strip() for field in line.split('\t')]
             bc2sample[bc] = sample
     return bc2sample
 
@@ -58,3 +58,51 @@ def compute_size_factors(counts):
     masked = np.ma.masked_equal(counts, 0)
     geom_means = np.ma.exp(np.ma.log(masked).sum(axis=1) / (~masked.mask).sum(axis=1)).data[np.newaxis].T
     return np.ma.median(masked / geom_means, axis=0).data
+
+
+# https://github.com/lh3/readfq
+def readfq(fp): # this is a generator function
+    last = None # this is a buffer keeping the last unprocessed line
+    while True: # mimic closure; is it a bad idea?
+        if not last: # the first record or a record following a fastq
+            for l in fp: # search for the start of the next record
+                if l[0] in '>@': # fasta/q header line
+                    last = l[:-1] # save this line
+                    break
+        if not last: break
+        name, seqs, last = last[1:].partition(" ")[0], [], None
+        for l in fp: # read the sequence
+            if l[0] in '@+>':
+                last = l[:-1]
+                break
+            seqs.append(l[:-1])
+        if not last or last[0] != '+': # this is a fasta record
+            yield name, ''.join(seqs), None # yield a fasta record
+            if not last: break
+        else: # this is a fastq record
+            seq, leng, seqs = ''.join(seqs), 0, []
+            for l in fp: # read the quality
+                seqs.append(l[:-1])
+                leng += len(l) - 1
+                if leng >= len(seq): # have read enough quality
+                    last = None
+                    yield name, seq, ''.join(seqs); # yield a fastq record
+                    break
+            if last: # reach EOF before reading enough quality
+                yield name, seq, None # yield a fasta record instead
+                break
+
+
+def read_fastq_nowrap(fp):
+    for line in fp:
+        l1 = line.strip()
+        try:
+            l2 = next(fp).strip()
+            l3 = next(fp)
+            l4 = next(fp).strip()
+        except StopIteration:
+            raise ValueError('wrong number of lines')
+        if (l1[0] != '@') or (l3 != '+\n') or (len(l2) != len(l4)):
+            raise ValueError('error on record:\n{}\n{}\n{}{}'.format(
+                l1, l2, l3, l4))
+        yield (l1[1:], l2, l4)
