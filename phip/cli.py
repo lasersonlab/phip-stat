@@ -163,7 +163,7 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
             bc2sample = edit1_mapping(load_mapping(mapping))
             # open file handles for each sample
             ext = 'fastq.gz' if compress_output else 'fastq'
-            f = lambda s: pjoin(output, f'{s}.{ext}')
+            f = lambda s: pjoin(output, '{}.{}'.format(s, ext))
             output_handles = {s: open_maybe_compressed(f(s), 'w')
                               for s in bc2sample.values()}
             try:

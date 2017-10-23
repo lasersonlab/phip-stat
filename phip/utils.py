@@ -44,7 +44,8 @@ def edit1_mapping(mapping):
     for bc in mapping.keys():
         for mut in one_base_mutants(bc):
             if mut in extended_mapping:
-                raise ValueError(f'{mut} already in dict: BCs are within 1 edit')
+                raise ValueError(
+                    '{} already in dict: BCs are within 1 edit'.format(mut))
             extended_mapping[mut] = mapping[bc]
     return extended_mapping
 
