@@ -104,7 +104,7 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     import pandas as pd
     from phip.stats import gamma_poisson_model as model
     counts = pd.read_csv(input, sep='\t', header=0, index_col=list(range(index_cols)))
-    os.makedirs(output)
+    os.makedirs(output, exist_ok=True)
     alpha, beta, rates, mlxp = model(counts, trim_percentile)
     with open(pjoin(output, 'parameters.json'), 'w') as op:
         json.dump(
