@@ -1,23 +1,44 @@
+import re
 import os.path as osp
 from glob import glob
-
-# list of all input fastq files
-input_files = glob(osp.expanduser(config['input_glob']))
+from collections import namedtuple
 
 
-#############################################################
-# EDIT THIS: define config['samples']
-#
+def fastx_stem(path):
+    m = re.match('(.+)(?:\.fast[aq]|\.fna|\.f[aq])(?:\.gz)?$', osp.basename(path))
+    if m is None:
+        raise ValueError(
+            'Path {} does not look like a fast[aq] file'.format(path))
+    return m.group(1)
+
+
+def parse_illumina_fastq_name(path):
+    """Parse Illumina fastq file name"""
+    stem = fastx_stem(path)
+    m = re.match('(.*)_S(\d+)_L(\d+)_([RI][12])_001', stem)
+    IlluminaFastq = namedtuple(
+        'IlluminaFastq', ['sample', 'sample_num', 'lane', 'read', 'path'])
+    return IlluminaFastq(sample=m.group(1),
+                         sample_num=int(m.group(2)),
+                         lane=int(m.group(3)),
+                         read=m.group(4),
+                         path=path)
+
+
+###############################################################################
+# <CONFIGURATION>
+# define config['samples'] as dict[sample_name, list(sample_abs_path)]
+# e.g.,
 # config['samples'] = {'sample1': ['sample1.1.fastq.gz', 'sample1.2.fastq.gz']}
-#
-# config['samples'] is a dictionary where each key is the name of a sample and
-# each value is a list of paths to fastq files for that sample
-from llutil.utils import parse_illumina_fastq_name
 config['samples'] = {}
-for f in input_files:
+for f in glob('/Users/laserson/Downloads/BaseSpace/phip-14-48923876/*/*.fastq.gz'):
     p = parse_illumina_fastq_name(f)
     config['samples'].setdefault(p.sample, []).append(p.path)
-#############################################################
+
+config['ref_fasta'] =
+config['read_length'] =
+# </CONFIGURATION>
+###############################################################################
 
 
 rule all:
@@ -76,8 +97,9 @@ rule compute_pvals:
     input:
         'cpm.tsv'
     output:
-        'mlxp.tsv'
+        'gamma-poisson',
+        'gamma-poisson/mlxp.tsv'
     params:
         trim_percentile = 99.9
     shell:
-        'phip gamma-poisson-model -t {trim_percentile} -i {input} -o {output}'
+        'phip gamma-poisson-model -t {params.trim_percentile} -i {input} -o {output[0]}'
