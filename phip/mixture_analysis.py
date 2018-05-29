@@ -77,8 +77,8 @@ def do_mixture_analysis(
     result_df = pandas.DataFrame(list(result_iterator))
 
     if worker_pool:
-        worker_pool.join()
         worker_pool.close()
+        worker_pool.join()
 
     result_df = result_df.set_index('index')
     print(result_df)
