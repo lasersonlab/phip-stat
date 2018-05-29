@@ -81,7 +81,6 @@ def do_mixture_analysis(
         worker_pool.join()
 
     result_df = result_df.set_index('index')
-    print(result_df)
 
     assignment_columns = [c for c in result_df if c.startswith("assignment_")]
     assignment_columns_beads_only = [
