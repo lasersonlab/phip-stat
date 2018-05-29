@@ -113,6 +113,64 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     mlxp.to_csv(pjoin(output, 'mlxp.tsv'), sep='\t', float_format='%.2f')
 
 
+@cli.command(name='mixture-analysis')
+@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
+        help='input counts file (tab-delim)')
+@option('-o', '--output', required=False, type=Path(exists=False),
+        help='output file or directory. If ends in .tsv, will be treated as file')
+@option('--beads-only-samples', required=False,
+        help='comma separated list of beads only (i.e. control) samples')
+@option('--pulldown-samples', required=False,
+        help='comma separated list of pulldown (i.e. non-control) samples')
+@option('-d', '--index-cols', default=1,
+        help='number of columns to use as index/row-key')
+@option('--num-jobs', default=1,
+        help='number of columns to use as index/row-key')
+def mixture_model(
+        input,
+        output,
+        index_cols,
+        beads_only_samples,
+        pulldown_samples,
+        num_jobs):
+    """XXXX"""
+    import pandas as pd
+    from phip.mixture_analysis import do_mixture_analysis
+
+    counts = pd.read_csv(
+        input, sep='\t', header=0, index_col=list(range(index_cols)))
+
+    if beads_only_samples:
+        beads_only_samples = [c.strip() for c in beads_only_samples.split(",")]
+    if pulldown_samples:
+        pulldown_samples = [c.strip() for c in pulldown_samples.split(",")]
+    if not beads_only_samples and not pulldown_samples:
+        beads_only_samples = [c for c in counts if "beads_only" in c]
+    if pulldown_samples and not beads_only_samples:
+        beads_only_samples = [c for c in counts if c not in pulldown_samples]
+    if beads_only_samples and not pulldown_samples:
+        pulldown_samples = [c for c in counts if c not in beads_only_samples]
+
+    print("Beads only samples [%d]: %s" % (
+        len(beads_only_samples), ", ".join(beads_only_samples)))
+    print("\nPulldown samples [%d]: %s" % (
+        len(pulldown_samples), ", ".join(pulldown_samples)))
+
+    result_df = do_mixture_analysis(
+        counts[beads_only_samples + pulldown_samples],
+        beads_only_samples,
+        num_jobs=num_jobs)
+    if output.endswith(".tsv"):
+        output_path = output
+    else:
+        os.makedirs(output)
+        output_path = pjoin(output, "mixture.tsv")
+    result_df.to_csv(output_path, sep='\t', float_format='%.2f')
+    print("Wrote: %s" % output_path)
+
+
+
+
 # TOOLS THAT SHOULD BE USED RARELY
 
 
