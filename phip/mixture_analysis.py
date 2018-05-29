@@ -94,7 +94,7 @@ def do_mixture_analysis(
     result_df["gap"] = (result_df.m2_u2 - result_df.m2_u1) / result_df.m1_s
     assert (result_df.gap >= 0).all(), result_df.gap
 
-    for gap in [0, 1, 2, 3]:
+    for gap in range(7):
         sub_df = result_df.loc[result_df.gap >= gap].sort_values(
             "aic_diff", ascending=False).copy()
         sub_df["sample_hits_beads_only_cumulative"] = (
