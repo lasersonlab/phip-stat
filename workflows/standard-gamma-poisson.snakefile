@@ -3,6 +3,8 @@ import os.path as osp
 from glob import glob
 from collections import namedtuple
 
+from tqdm import tqdm
+
 
 def fastx_stem(path):
     m = re.match('(.+)(?:\.fast[aq]|\.fna|\.f[aq])(?:\.gz)?$', osp.basename(path))
@@ -35,67 +37,106 @@ for f in glob('/Users/laserson/Downloads/BaseSpace/phip-14-48923876/*/*.fastq.gz
     p = parse_illumina_fastq_name(f)
     config['samples'].setdefault(p.sample, []).append(p.path)
 
-config['ref_fasta'] =
-config['read_length'] =
+config['reference_index'] =
 # </CONFIGURATION>
 ###############################################################################
 
 
 rule all:
     input:
-        'cpm.tsv',
-        'mlxp.tsv'
+        'normalized_match_counts.tsv',
+        'match_counts.tsv',
+        'alignment_counts.tsv',
+        'gamma-poisson/mlxp.tsv'
 
 
-rule create_kmer_reference:
+rule align_ref:
     input:
-        config['ref_fasta']
+        lambda wildcards: config['samples'][wildcards.sample]
     output:
-        temp('reference.fasta')
+        'alignments/{sample}.bam',
     params:
-        # kallisto needs a bit of extra sequence in the reference
-        k = int(config['read_length']) + round(0.2 * int(config['read_length']))
+        reference_index = config['reference_index']
+    threads: 1
     shell:
-        'phip truncate-fasta -k {params.k} -i {input} -o {output}'
+        """
+        cat {input} \
+            | gunzip \
+            | bowtie2 -p {threads} --norc -x {params.reference_index} -U - \
+            | tqdm \
+            | samtools sort -O BAM -o {output}
+        """
 
 
-rule kallisto_index:
+rule compute_alignment_counts:
     input:
-        'reference.fasta'
+        'alignments/{sample}.bam'
     output:
-        temp('kallisto.idx')
+        'alignment_counts/{sample}.alignment_counts.tsv'
     shell:
-        'kallisto index -i {output} {input}'
+        """
+        echo "id\t{wildcards.sample}" > {output}
+        samtools depth -aa -m 10000000 {input} \
+            | tqdm \
+            | awk 'BEGIN {{OFS="\t"}} {{counts[$1] = ($3 < counts[$1]) ? counts[$1] : $3}} END {{for (c in counts) {{print c, counts[c]}}}}' \
+            | sort -k 1 \
+            >> {output}
+        """
 
 
-rule quantify_phip:
+rule compute_match_counts:
     input:
-        index = 'kallisto.idx',
-        samples = lambda wildcards: config['samples'][wildcards.sample]
+        'alignments/{sample}.bam'
     output:
-        'kallisto/{sample}/abundance.tsv'
+        'match_counts/{sample}.match_counts.tsv'
+    run:
+        from collections import Counter
+        from pysam import AlignmentFile
+        counts = Counter()
+        bamfile = AlignmentFile(input[0], 'rb')
+        for aln in tqdm(bamfile, position=1):
+            if aln.flag == 0 and len(aln.cigar) == 1 and aln.cigar[0] == (0, aln.query_length):
+                counts[aln.reference_name] += 1
+        with open(output[0], 'w') as op:
+            print('id\t{}'.format(wildcards.sample), file=op)
+            for n in bamfile.header.references:
+                print('{}\t{}'.format(n, counts[n]), file=op)
+
+
+rule merge_alignment_counts:
+    input:
+        expand('alignment_counts/{sample}.alignment_counts.tsv', sample=config['samples'])
+    output:
+        'alignment_counts.tsv'
     params:
-        output_dir = 'kallisto/{sample}',
-        rl = config['read_length'],
-        sd = 0.1,
+        input_dir = 'alignment_counts'
     shell:
-        'kallisto quant --single --plaintext --fr-stranded -l {params.rl} -s {params.sd} -t {threads} -i {input.index} -o {params.output_dir} {input.samples}'
+        'phip merge-columns -i {params.input_dir} -o {output} -m iter'
 
 
-rule merge_counts:
+rule merge_match_counts:
     input:
-        expand('kallisto/{sample}/abundance.tsv', sample=config['samples']),
+        expand('match_counts/{sample}.match_counts.tsv', sample=config['samples'])
     output:
-        'cpm.tsv'
+        'match_counts.tsv'
     params:
-        input_dir = 'kallisto'
+        input_dir = 'match_counts'
     shell:
-        'phip merge-kallisto-tpm -i {params.input_dir} -o {output}'
+        'phip merge-columns -i {params.input_dir} -o {output} -m iter'
+
+
+rule normalize_match_counts:
+    input:
+        'match_counts.tsv'
+    output:
+        'normalized_match_counts.tsv'
+    shell:
+        'phip normalize-counts -i {input} -o {output} -m size-factors'
 
 
 rule compute_pvals:
     input:
-        'cpm.tsv'
+        'normalized_match_counts.tsv'
     output:
         'gamma-poisson',
         'gamma-poisson/mlxp.tsv'
