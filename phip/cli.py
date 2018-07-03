@@ -113,6 +113,59 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     mlxp.to_csv(pjoin(output, 'mlxp.tsv'), sep='\t', float_format='%.2f')
 
 
+@cli.command(name='truncated-factorization-model')
+@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
+    help='input counts file (tab-delim)')
+@option('-o', '--output', required=False, type=Path(exists=False),
+    help='output file or directory. If ends in .tsv, will be treated as file')
+@option('-d', '--index-cols', default=1,
+    help='number of columns to use as index/row-key')
+@option('--rank', default=3,
+    help='matrix rank')
+@option('--learning-rate', default=3,
+    help='learning rate for Adam optimizer')
+@option('--minibatch-size', default=1024 * 32,
+    help='rows per minibatch')
+@option('--patience', default=5,
+    help='number of epochs of no improvement to wait before early stopping')
+@option('--max-epochs', default=1000,
+    help='maximum epochs')
+@option('--log-every-seconds', default=1,
+    help='write progress no more often than every N seconds')
+def clipped_factorization_model(
+        input,
+        output,
+        index_cols,
+        rank,
+        learning_rate,
+        minibatch_size,
+        patience,
+        max_epochs,
+        log_every_seconds):
+    """Compute residuals from a clipped matrix factorization"""
+    import pandas as pd
+    from .clipped_factorization_analysis import do_clipped_factorization_analysis
+    counts = pd.read_csv(
+        input, sep='\t', header=0, index_col=list(range(index_cols)))
+
+    result_df = do_clipped_factorization_analysis(
+        counts,
+        rank=rank,
+        learning_rate=learning_rate,
+        minibatch_size=minibatch_size,
+        patience=patience,
+        max_epochs=max_epochs,
+        log_every_seconds=log_every_seconds)
+
+    if output.endswith(".tsv"):
+        output_path = output
+    else:
+        os.makedirs(output)
+        output_path = pjoin(output, "mixture.tsv")
+    result_df.to_csv(output_path, sep='\t', float_format='%.2f')
+    print("Wrote: %s" % output_path)
+
+
 # TOOLS THAT SHOULD BE USED RARELY
 
 
