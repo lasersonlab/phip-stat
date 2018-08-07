@@ -80,7 +80,7 @@ rule all:
     input:
         'normalized_counts.tsv',
         'counts.tsv',
-        'gamma-poisson/mlxp.tsv'
+        'gamma-poisson'
 
 
 rule compute_counts:
@@ -146,9 +146,8 @@ rule compute_gamma_poisson:
     input:
         'normalized_counts.tsv'
     output:
-        'gamma-poisson',
-        'gamma-poisson/mlxp.tsv'
+        directory('gamma-poisson')
     params:
         trim_percentile = 99.9
     shell:
-        'phip gamma-poisson-model -t {params.trim_percentile} -i {input} -o {output[0]}'
+        'phip gamma-poisson-model -t {params.trim_percentile} -i {input} -o {output}'
