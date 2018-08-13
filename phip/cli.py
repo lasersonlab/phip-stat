@@ -122,7 +122,7 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     help='number of columns to use as index/row-key')
 @option('--rank', default=3,
     help='matrix rank')
-@option('--learning-rate', default=3,
+@option('--learning-rate', default=3.0,
     help='learning rate for Adam optimizer')
 @option('--minibatch-size', default=1024 * 32,
     help='rows per minibatch')
@@ -130,6 +130,9 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     help='number of epochs of no improvement to wait before early stopping')
 @option('--max-epochs', default=1000,
     help='maximum epochs')
+@option('--discard-sample-reads-fraction', default=0.01,
+    help='Discard samples with fewer than X * m reads, where m is the median '
+    'number of reads across samples')
 @option('--log-every-seconds', default=1,
     help='write progress no more often than every N seconds')
 def clipped_factorization_model(
@@ -141,12 +144,22 @@ def clipped_factorization_model(
         minibatch_size,
         patience,
         max_epochs,
+        discard_sample_reads_fraction,
         log_every_seconds):
     """Compute residuals from a clipped matrix factorization"""
     import pandas as pd
     from .clipped_factorization_analysis import do_clipped_factorization_analysis
     counts = pd.read_csv(
         input, sep='\t', header=0, index_col=list(range(index_cols)))
+
+    total_reads = counts.sum()
+    expected_reads = total_reads.median()
+    for sample in counts.columns:
+        if total_reads[sample] / expected_reads < discard_sample_reads_fraction:
+            print("[!!] EXCLUDING SAMPLE %s DUE TO INSUFFICIENT READS "
+                  "(%d vs. sample median %d)" % (
+                sample, total_reads[sample], expected_reads))
+            del counts[sample]
 
     result_df = do_clipped_factorization_analysis(
         counts,
