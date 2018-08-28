@@ -153,35 +153,29 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
         from phip.utils import read_fastq_nowrap as fastq_parser
     else:
         from phip.utils import readfq as fastq_parser
-    record_template = '@{}:{}\n{}\n+\n{}'
-    r_f = osp.abspath(input)
-    b_f = osp.abspath(barcodes)
     os.makedirs(output, mode=0o755)
-    with open_maybe_compressed(r_f, 'r') as r_h:
-        with open_maybe_compressed(b_f, 'r') as b_h:
-            # generate all possible edit-1 BCs
-            bc2sample = edit1_mapping(load_mapping(mapping))
-            # open file handles for each sample
-            ext = 'fastq.gz' if compress_output else 'fastq'
-            f = lambda s: pjoin(output, '{}.{}'.format(s, ext))
-            output_handles = {s: open_maybe_compressed(f(s), 'w')
-                              for s in bc2sample.values()}
-            try:
-                r_it = fastq_parser(r_h)
-                b_it = fastq_parser(b_h)
-                for read, barcode in zip(tqdm(r_it), b_it):
-                    assert read[0] == barcode[0]
-                    title_prefix = read[0].rsplit(':', maxsplit=1)[0]
-                    try:
-                        print(
-                            record_template.format(
-                                title_prefix, barcode[1], read[1], read[2]),
-                            file=output_handles[bc2sample[barcode[1]]])
-                    except KeyError:
-                        continue
-            finally:
-                for h in output_handles.values():
-                    h.close()
+    record_template = '@{}:{}\n{}\n+\n{}'
+    input = osp.abspath(input)
+    barcodes = osp.abspath(barcodes)
+
+    # generate all possible edit-1 BCs
+    bc2sample = edit1_mapping(load_mapping(mapping))
+
+    with open_maybe_compressed(input, 'r') as r_h, open_maybe_compressed(barcodes, 'r') as b_h:
+        # open file handles for each sample
+        ext = 'fastq.gz' if compress_output else 'fastq'
+        output_handles = {s: open_maybe_compressed(pjoin(output, f'{s}.{ext}'), 'w')
+                          for s in set(bc2sample.values())}
+        try:
+            for (r_n, r_s, r_q), (b_n, b_s, b_q) in zip(tqdm(fastq_parser(r_h)), fastq_parser(b_h)):
+                assert r_n.split(maxsplit=1)[0] == b_n.split(maxsplit=1)[0]
+                try:
+                    print(f'@{r_n}\n{r_s}\n+\n{r_q}', file=output_handles[bc2sample[b_s]])
+                except KeyError:
+                    continue
+        finally:
+            for h in output_handles.values():
+                h.close()
 
 
 # DEPRECATED TOOLS
