@@ -70,6 +70,9 @@ for f in glob('/Users/laserson/Downloads/BaseSpace/phip-14-48923876/*/*.fastq.gz
     p = parse_illumina_fastq_name(f)
     config['samples'].setdefault(p.sample, []).append(p.path)
 
+# NOTE: this should be an "effective read length": the number of bases to use
+# from the reference and from the reads. e.g., if seqencing 150 bp on the
+# human36 lib, some of the read will be of the adaptor
 config['read_length'] =
 config['reference_fasta'] =
 # </CONFIGURATION>
