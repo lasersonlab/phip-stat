@@ -102,7 +102,7 @@ def merge_kallisto_tpm(input, output):
 def gamma_poisson_model(input, output, trim_percentile, index_cols):
     """compute -log10(pvals) with gamma-poisson model"""
     import pandas as pd
-    from phip.stats import gamma_poisson_model as model
+    from phip.gampois import gamma_poisson_model as model
     counts = pd.read_csv(input, sep='\t', header=0, index_col=list(range(index_cols)))
     os.makedirs(output, exist_ok=True)
     alpha, beta, rates, mlxp = model(counts, trim_percentile)
