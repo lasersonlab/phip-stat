@@ -7,10 +7,10 @@ import tensorflow as tf
 from tensorflow.contrib.distributions import percentile
 
 
-def do_clipped_factorization_analysis(
+def do_clipped_factorization(
         counts_df,
         rank=3,
-        truncate_percentile=99.9,
+        clip_percentile=99.9,
         learning_rate=1.0,
         minibatch_size=1024 * 32,
         patience=5,
@@ -77,7 +77,7 @@ def do_clipped_factorization_analysis(
         + tf.reduce_mean(unclipped_term) / s)
 
     update_truncate_value = truncate_threshold.assign(
-        percentile(differences, truncate_percentile))
+        percentile(differences, clip_percentile))
 
     # Training
     train_step = tf.train.AdamOptimizer(

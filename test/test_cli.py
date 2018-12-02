@@ -37,7 +37,7 @@ def test_clipped_factorization_model():
 
         data_df.to_csv("input.tsv", sep="\t", index=True)
 
-        # No truncation (truncate-percentile > 100.0)
+        # No clipping (clip-percentile > 100.0)
         # Here we expect that the background effects will be used to model the
         # corrupted entry.
         command_result = invoke_and_assert_success(
@@ -49,7 +49,7 @@ def test_clipped_factorization_model():
                 "--max-epochs", "10000",
                 "--patience", "10",
                 "--rank", "1",
-                "--truncate-percentile", "101",
+                "--clip-percentile", "101.0",
                 "--discard-sample-reads-fraction", "0.0",
                 "--no-normalize-to-reads-per-million",
         ])
@@ -66,7 +66,7 @@ def test_clipped_factorization_model():
             1e7)
         assert_less(result_df.iloc[0, 0], 1e9)
 
-        # With truncation. Here we expect the corrupted entry to be excluded
+        # With clipping. Here we expect the corrupted entry to be excluded
         # and have little impact on the background effects.
         command_result = invoke_and_assert_success(
             runner,
@@ -77,7 +77,7 @@ def test_clipped_factorization_model():
                 "--max-epochs", "10000",
                 "--patience", "10",
                 "--rank", "1",
-                "--truncate-percentile", "99.9",
+                "--clip-percentile", "99.9",
                 "--discard-sample-reads-fraction", "0.0",
                 "--no-normalize-to-reads-per-million",
             ])

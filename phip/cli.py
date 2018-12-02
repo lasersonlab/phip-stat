@@ -113,7 +113,7 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     mlxp.to_csv(pjoin(output, 'mlxp.tsv'), sep='\t', float_format='%.2f')
 
 
-@cli.command(name='truncated-factorization-model')
+@cli.command(name='clipped-factorization-model')
 @option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
     help='input counts file (tab-delim)')
 @option('-o', '--output', required=False, type=Path(exists=False),
@@ -122,8 +122,8 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     help='number of columns to use as index/row-key')
 @option('--rank', default=3,
     help='matrix rank')
-@option('--truncate-percentile', default=99.9,
-    help='percentile thershold to truncate at')
+@option('--clip-percentile', default=99.9,
+    help='percentile thershold to clip at')
 @option('--learning-rate', default=3.0,
     help='learning rate for Adam optimizer')
 @option('--minibatch-size', default=1024 * 32,
@@ -144,7 +144,7 @@ def clipped_factorization_model(
         output,
         index_cols,
         rank,
-        truncate_percentile,
+        clip_percentile,
         learning_rate,
         minibatch_size,
         patience,
@@ -154,7 +154,7 @@ def clipped_factorization_model(
         log_every_seconds):
     """Compute residuals from a clipped matrix factorization"""
     import pandas as pd
-    from .clipped_factorization_analysis import do_clipped_factorization_analysis
+    from .clipped_factorization_analysis import do_clipped_factorization
     counts = pd.read_csv(
         input, sep='\t', header=0, index_col=list(range(index_cols)))
 
@@ -167,10 +167,10 @@ def clipped_factorization_model(
                 sample, total_reads[sample], expected_reads))
             del counts[sample]
 
-    result_df = do_clipped_factorization_analysis(
+    result_df = do_clipped_factorization(
         counts,
         rank=rank,
-        truncate_percentile=truncate_percentile,
+        clip_percentile=clip_percentile,
         learning_rate=learning_rate,
         minibatch_size=minibatch_size,
         patience=patience,
