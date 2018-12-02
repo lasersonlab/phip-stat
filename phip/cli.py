@@ -122,6 +122,8 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     help='number of columns to use as index/row-key')
 @option('--rank', default=3,
     help='matrix rank')
+@option('--truncate-percentile', default=99.9,
+    help='percentile thershold to truncate at')
 @option('--learning-rate', default=3.0,
     help='learning rate for Adam optimizer')
 @option('--minibatch-size', default=1024 * 32,
@@ -133,6 +135,8 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
 @option('--discard-sample-reads-fraction', default=0.01,
     help='Discard samples with fewer than X * m reads, where m is the median '
     'number of reads across samples')
+@option('--no-normalize-to-reads-per-million', is_flag=True,
+        help='Work directly on read counts, not counts divided by sample totals')
 @option('--log-every-seconds', default=1,
     help='write progress no more often than every N seconds')
 def clipped_factorization_model(
@@ -140,11 +144,13 @@ def clipped_factorization_model(
         output,
         index_cols,
         rank,
+        truncate_percentile,
         learning_rate,
         minibatch_size,
         patience,
         max_epochs,
         discard_sample_reads_fraction,
+        no_normalize_to_reads_per_million,
         log_every_seconds):
     """Compute residuals from a clipped matrix factorization"""
     import pandas as pd
@@ -164,10 +170,12 @@ def clipped_factorization_model(
     result_df = do_clipped_factorization_analysis(
         counts,
         rank=rank,
+        truncate_percentile=truncate_percentile,
         learning_rate=learning_rate,
         minibatch_size=minibatch_size,
         patience=patience,
         max_epochs=max_epochs,
+        normalize_to_reads_per_million=not no_normalize_to_reads_per_million,
         log_every_seconds=log_every_seconds)
 
     if output.endswith(".tsv"):
@@ -220,7 +228,6 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
     else:
         from phip.utils import readfq as fastq_parser
     os.makedirs(output, mode=0o755)
-    record_template = '@{}:{}\n{}\n+\n{}'
     input = osp.abspath(input)
     barcodes = osp.abspath(barcodes)
 
@@ -230,13 +237,19 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
     with open_maybe_compressed(input, 'r') as r_h, open_maybe_compressed(barcodes, 'r') as b_h:
         # open file handles for each sample
         ext = 'fastq.gz' if compress_output else 'fastq'
-        output_handles = {s: open_maybe_compressed(pjoin(output, f'{s}.{ext}'), 'w')
-                          for s in set(bc2sample.values())}
+        output_handles = {
+            s: open_maybe_compressed(
+                pjoin(output, '{s}.{ext}'.format(s=s, ext=ext)), 'w')
+            for s in set(bc2sample.values())
+        }
         try:
             for (r_n, r_s, r_q), (b_n, b_s, b_q) in zip(tqdm(fastq_parser(r_h)), fastq_parser(b_h)):
                 assert r_n.split(maxsplit=1)[0] == b_n.split(maxsplit=1)[0]
                 try:
-                    print(f'@{r_n}\n{r_s}\n+\n{r_q}', file=output_handles[bc2sample[b_s]])
+                    print(
+                        '@{r_n}\n{r_s}\n+\n{r_q}'.format(
+                            r_n=r_n, r_s=r_s, r_q=r_q),
+                        file=output_handles[bc2sample[b_s]])
                 except KeyError:
                     continue
         finally:

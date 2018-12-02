@@ -15,6 +15,7 @@ def do_clipped_factorization_analysis(
         minibatch_size=1024 * 32,
         patience=5,
         max_epochs=1000,
+        normalize_to_reads_per_million=True,
         log_every_seconds=10):
     """
     Implements the factorization:
@@ -34,12 +35,17 @@ def do_clipped_factorization_analysis(
     may have all of their residuals above the truncation threshold. Once this
     happens they will likely stay stuck there since they do not contribute to
     the gradient. The `unclipped_term` fixes this by providing a small nudge
-    toward smaller errors without truncation. See implementation for details.
+    toward smaller errors without truncation.
     """
 
     # Non-tf setup
-    reads_per_million = (counts_df * 1e6 / counts_df.sum(0)).astype("float32")
-    (n, s) = reads_per_million.shape
+    if normalize_to_reads_per_million:
+        observed = (counts_df * 1e6 / counts_df.sum(0)).astype("float32")
+    else:
+        observed = counts_df.astype("float32")
+    (n, s) = observed.shape
+    if len(counts_df) < minibatch_size:
+        minibatch_size = len(counts_df)
 
     # Placeholders
     target = tf.placeholder(
@@ -52,7 +58,7 @@ def do_clipped_factorization_analysis(
         np.random.rand(n, rank), name="A", dtype="float32")
     b = tf.Variable(
         np.random.rand(rank, s), name="B", dtype="float32")
-    truncate_threshold = tf.Variable(reads_per_million.max().max())
+    truncate_threshold = tf.Variable(observed.max().max())
 
     # Derived quantities
     reconstruction = tf.matmul(
@@ -83,23 +89,23 @@ def do_clipped_factorization_analysis(
     last_log_at = 0
     with tf.Session() as session:
         session.run(init)
-        all_indices = np.arange(reads_per_million.shape[0], dtype=int)
+        all_indices = np.arange(observed.shape[0], dtype=int)
 
         for i in range(max_epochs):
-            indices = np.array(list(range(reads_per_million.shape[0])))
+            indices = np.array(list(range(observed.shape[0])))
             np.random.shuffle(indices)
             for minibatch_indices_value in np.array_split(indices, int(
                             len(indices) / minibatch_size)):
                 minibatch_indices_value = minibatch_indices_value[:minibatch_size]
                 if len(minibatch_indices_value) == minibatch_size:
                     feed_dict = {
-                        target: reads_per_million.values[minibatch_indices_value],
+                        target: observed.values[minibatch_indices_value],
                         minibatch_indices: minibatch_indices_value
                     }
                     session.run(train_step, feed_dict=feed_dict)
 
             feed_dict = {
-                target: reads_per_million,
+                target: observed,
                 minibatch_indices: all_indices,
             }
             (truncate_threshold_value, cost_value) = session.run(
@@ -127,14 +133,14 @@ def do_clipped_factorization_analysis(
     background_names = ["_background_%d" % i for i in range(rank)]
     best_a = pd.DataFrame(
         best_a,
-        index=reads_per_million.index,
+        index=observed.index,
         columns=background_names)
     best_b = pd.DataFrame(
         best_b,
         index=background_names,
-        columns=reads_per_million.columns)
+        columns=observed.columns)
 
-    results = reads_per_million - np.matmul(best_a, best_b)
+    results = observed - np.matmul(best_a, best_b)
     for name in background_names:
         results[name] = best_a[name]
         results.loc[name] = best_b.loc[name]
