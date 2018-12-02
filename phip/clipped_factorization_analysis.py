@@ -1,7 +1,7 @@
 import time
 
-import pandas
-import numpy
+import pandas as pd
+import numpy as np
 
 import tensorflow as tf
 from tensorflow.contrib.distributions import percentile
@@ -49,9 +49,9 @@ def do_clipped_factorization_analysis(
 
     # Variables
     a = tf.Variable(
-        numpy.random.rand(n, rank), name="A", dtype="float32")
+        np.random.rand(n, rank), name="A", dtype="float32")
     b = tf.Variable(
-        numpy.random.rand(rank, s), name="B", dtype="float32")
+        np.random.rand(rank, s), name="B", dtype="float32")
     truncate_threshold = tf.Variable(reads_per_million.max().max())
 
     # Derived quantities
@@ -83,12 +83,12 @@ def do_clipped_factorization_analysis(
     last_log_at = 0
     with tf.Session() as session:
         session.run(init)
-        all_indices = numpy.array(list(range(reads_per_million.shape[0])))
+        all_indices = np.arange(reads_per_million.shape[0], dtype=int)
 
         for i in range(max_epochs):
-            indices = numpy.array(list(range(reads_per_million.shape[0])))
-            numpy.random.shuffle(indices)
-            for minibatch_indices_value in numpy.array_split(indices, int(
+            indices = np.array(list(range(reads_per_million.shape[0])))
+            np.random.shuffle(indices)
+            for minibatch_indices_value in np.array_split(indices, int(
                             len(indices) / minibatch_size)):
                 minibatch_indices_value = minibatch_indices_value[:minibatch_size]
                 if len(minibatch_indices_value) == minibatch_size:
@@ -125,16 +125,16 @@ def do_clipped_factorization_analysis(
                 break
 
     background_names = ["_background_%d" % i for i in range(rank)]
-    best_a = pandas.DataFrame(
+    best_a = pd.DataFrame(
         best_a,
         index=reads_per_million.index,
         columns=background_names)
-    best_b = pandas.DataFrame(
+    best_b = pd.DataFrame(
         best_b,
         index=background_names,
         columns=reads_per_million.columns)
 
-    results = reads_per_million - numpy.matmul(best_a, best_b)
+    results = reads_per_million - np.matmul(best_a, best_b)
     for name in background_names:
         results[name] = best_a[name]
         results.loc[name] = best_b.loc[name]
