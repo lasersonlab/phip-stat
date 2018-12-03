@@ -102,7 +102,7 @@ def do_clipped_factorization(
         np.random.rand(n, rank), name="A", dtype="float32")
     b = tf.Variable(
         np.random.rand(rank, s), name="B", dtype="float32")
-    truncate_threshold = tf.Variable(observed.max().max())
+    clip_threshold = tf.Variable(observed.max().max())
 
     # Derived quantities
     reconstruction = tf.matmul(
@@ -117,10 +117,10 @@ def do_clipped_factorization(
         tf.pow(differences, 2), axis=1)
     loss = (
         tf.reduce_mean(
-            tf.pow(tf.minimum(differences, truncate_threshold), 2))
+            tf.pow(tf.minimum(differences, clip_threshold), 2))
         + tf.reduce_mean(unclipped_term) / s)
 
-    update_truncate_value = truncate_threshold.assign(
+    update_clip_value = clip_threshold.assign(
         percentile(differences, clip_percentile))
 
     # Training
@@ -152,8 +152,8 @@ def do_clipped_factorization(
                 target: observed,
                 minibatch_indices: all_indices,
             }
-            (truncate_threshold_value, cost_value) = session.run(
-                [update_truncate_value, loss], feed_dict=feed_dict)
+            (clip_threshold_value, cost_value) = session.run(
+                [update_clip_value, loss], feed_dict=feed_dict)
 
             # Update best epoch
             if best_cost_value is None or cost_value < best_cost_value:
@@ -166,7 +166,7 @@ def do_clipped_factorization(
                 print("[Epoch %5d] %f, truncating at %f%s" % (
                     i,
                     cost_value,
-                    truncate_threshold_value,
+                    clip_threshold_value,
                     ' [new best]' if i == best_epoch else ''))
 
             # Stop criterion
