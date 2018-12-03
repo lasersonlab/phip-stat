@@ -184,6 +184,13 @@ phip merge-columns -i workdir/pvals -o pvals.tsv -p 1
 
 The `-p 1` tells the command to take the 2nd column from each file (0-indexed).
 
+## Running unit tests
+Unit tests use the `nose` package and can be run with:
+
+```
+$ pip install nose  # if not already installed
+$ nosetests -sv test/
+```
 
 ## Appendix
 
