@@ -187,6 +187,106 @@ def clipped_factorization_model(
     print("Wrote: %s" % output_path)
 
 
+@cli.command(name='call-hits')
+@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
+    help='input counts file (tab-delim)')
+@option('-o', '--output', required=False, type=Path(exists=False),
+    help='output file or directory. If ends in .tsv, will be treated as file')
+@option('-d', '--index-cols', default=1,
+    help='number of columns to use as index/row-key')
+@option('--beads-regex', default=".*beads.*", show_default=True,
+    help='samples with names matching this regex are considered beads-only')
+@option('--ignore-columns-regex', default="^_background.*", show_default=True,
+    help='ignore columns matching the given regex. Ignored columns are passed '
+    'through to output without processing.')
+@option('--ignore-rows-regex', default="^_background.*", show_default=True,
+    help='ignore rows matching the given regex')
+@option('--fdr', default=0.15, show_default=True,
+    help='target false discovery rate')
+@option('--min-smoothing', default=0, show_default=True,
+    help='minimum smoothing value')
+@option('--max-smoothing', default=500,
+    help='maximum smoothing value')
+@option('--verbosity', default=2, show_default=True,
+    help='verbosity: no output (0), result summary only (1), or progress (2)')
+def call_hits(
+        input,
+        output,
+        index_cols,
+        beads_regex,
+        ignore_columns_regex,
+        ignore_rows_regex,
+        fdr,
+        min_smoothing,
+        max_smoothing,
+        verbosity):
+    """Call hits at specified FDR"""
+    import pandas as pd
+    import re
+    from .hit_calling import do_hit_calling
+    original_counts = pd.read_csv(
+        input, sep='\t', header=0, index_col=list(range(index_cols)))
+    counts = original_counts
+    print("Read input matrix: %d clones x %d samples." % counts.shape)
+    print("Columns: %s" % " ".join(counts.columns))
+
+    columns_to_ignore = [
+        s for s in counts.columns
+        if ignore_columns_regex and re.match(
+            ignore_columns_regex, s, flags=re.IGNORECASE)
+    ]
+    if columns_to_ignore:
+        print("Ignoring %d columns matching regex '%s': %s" % (
+            len(columns_to_ignore),
+            ignore_columns_regex,
+            " ".join(columns_to_ignore)))
+        counts = counts[
+            [c for c in counts.columns if c not in columns_to_ignore]
+        ]
+
+    rows_to_ignore = [
+        s for s in counts.index
+        if ignore_rows_regex and index_cols == 1 and re.match(
+            ignore_rows_regex, s, flags=re.IGNORECASE)
+    ]
+    if rows_to_ignore:
+        print("Ignoring %d rows matching regex '%s': %s" % (
+            len(rows_to_ignore),
+            ignore_rows_regex,
+            " ".join(rows_to_ignore)))
+        counts = counts.loc[~counts.index.isin(rows_to_ignore)]
+
+    beads_only_samples = [
+        s for s in counts.columns
+        if re.match(beads_regex, s, flags=re.IGNORECASE)
+    ]
+    print("Beads-only regex '%s' matched %d samples: %s" % (
+        beads_regex,
+        len(beads_only_samples),
+        " ".join(beads_only_samples)))
+    if len(beads_only_samples) < 2:
+        raise ValueError("At least 2 beads only samples are required.")
+
+    result_df = do_hit_calling(
+        counts,
+        beads_only_samples=beads_only_samples,
+        fdr=fdr,
+        smoothing_bracket=(min_smoothing, max_smoothing),
+        verbosity=verbosity)
+
+    full_result_df = original_counts.copy()
+    for column in result_df.columns:
+        full_result_df.loc[result_df.index, column] = result_df[column]
+
+    if output.endswith(".tsv"):
+        output_path = output
+    else:
+        os.makedirs(output)
+        output_path = pjoin(output, "hits.tsv")
+    full_result_df.to_csv(output_path, sep='\t', float_format='%.2f')
+    print("Wrote: %s" % output_path)
+
+
 # TOOLS THAT SHOULD BE USED RARELY
 
 
