@@ -154,7 +154,7 @@ def clipped_factorization_model(
         log_every_seconds):
     """Compute residuals from a clipped matrix factorization"""
     import pandas as pd
-    from .clipped_factorization_analysis import do_clipped_factorization
+    from .clipped_factorization import do_clipped_factorization
     counts = pd.read_csv(
         input, sep='\t', header=0, index_col=list(range(index_cols)))
 
