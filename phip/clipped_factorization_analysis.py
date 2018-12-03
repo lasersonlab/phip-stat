@@ -48,6 +48,9 @@ def do_clipped_factorization(
 
     Note that "beads-only" samples are not treated in any special way here.
 
+    The optimization is performed using stochastic gradient descent (SGD) on
+    tensorflow.
+
     Parameters
     ----------
     counts_df : pandas.DataFrame
@@ -59,7 +62,7 @@ def do_clipped_factorization(
         contribute to the gradient. Aim for a lower-bound on the fraction
         of entries you expect NOT to be hits.
     learning_rate : float
-        Stochastic gradient descent (SGD) optimizer learning rate
+        SGD optimizer learning rate
     minibatch_size : int
         Number of rows per SGD minibatch
     patience : int

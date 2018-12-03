@@ -22,6 +22,10 @@ def invoke_and_assert_success(runner, command, args):
 def test_clipped_factorization_model():
     runner = CliRunner()
     with runner.isolated_filesystem():
+        # We generate synthetic data by taking the outer product of two random
+        # vectors and then corrupting a single element. This should be well
+        # modeled by our model using rank-1 factorization matrices.
+
         clone_backgrounds = normal(0, 10, (int(1e4),1))**2
         sample_backgrounds = normal(0, 10, (int(1e1),1))**2
         background = np.outer(clone_backgrounds, sample_backgrounds)
@@ -37,9 +41,12 @@ def test_clipped_factorization_model():
 
         data_df.to_csv("input.tsv", sep="\t", index=True)
 
-        # No clipping (clip-percentile > 100.0)
-        # Here we expect that the background effects will be used to model the
-        # corrupted entry.
+        # In the first test, we disable clipping (clip-percentile > 100) and
+        # test that the learned background effects try to account for the
+        # corrupted element. In the second test we lower the clip-percentile
+        # and verify that the corrupted element is ignored.
+        # ***
+        # FIRST TEST: No clipping (clip-percentile > 100.0)
         command_result = invoke_and_assert_success(
             runner,
             cli.clipped_factorization_model, [
@@ -66,8 +73,8 @@ def test_clipped_factorization_model():
             1e7)
         assert_less(result_df.iloc[0, 0], 1e9)
 
-        # With clipping. Here we expect the corrupted entry to be excluded
-        # and have little impact on the background effects.
+        # ***
+        # SECOND TEST: with clipping.
         command_result = invoke_and_assert_success(
             runner,
             cli.clipped_factorization_model, [
