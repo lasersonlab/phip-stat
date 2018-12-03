@@ -18,24 +18,68 @@ def do_clipped_factorization(
         normalize_to_reads_per_million=True,
         log_every_seconds=10):
     """
+    Attempt to detect and correct for clone and sample batch effects by
+    subtracting off a learned low-rank reconstruction of the counts matrix.
+
+    The return value is the clones x samples matrix of residuals after
+    correcting for batch effects, with a few additional rows and columns giving
+    the learned background effects.
+
     Implements the factorization:
 
     X = AB
-        where X is (n x s), A is (n x r), and B is (r x s)
+        where X is (clones x samples), A is (clones x rank), and B is
+        (rank x samples)
 
-    by minimizing the clipped loss:
+    by minimizing the "clipped" loss:
 
-        ||minimum(X - AB, percentile(X - AB, q)||_2 + unclipped_term
+        ||minimum(X - AB, percentile(X - AB, clip_percentile)||_2 + unclipped
 
-    The minimum is taken elementwise, and ||M||_2 is the Frobenius norm.
-    q is a parameter giving the percentile to clip at, default value 99.9. This
-    truncation makes the factorization robust to outliers, which are our hits.
+    The minimum is taken elementwise, and ||...||_2 is the Frobenius norm.
+    clip_percentile is a parameter giving the percentile to clip at. The
+    clipping makes the factorization robust to outliers, some of which are
+    likely phip-seq hits.
 
-    If the above is optimized without an `unclipped_term`, a few phage clones
+    If the above is optimized without an `unclipped` term, a few phage clones
     may have all of their residuals above the truncation threshold. Once this
     happens they will likely stay stuck there since they do not contribute to
-    the gradient. The `unclipped_term` fixes this by providing a small nudge
+    the gradient. The unclipped term fixes this by providing a small nudge
     toward smaller errors without truncation.
+
+    Note that "beads-only" samples are not treated in any special way here.
+
+    Parameters
+    ----------
+    counts_df : pandas.DataFrame
+        Matrix of read counts (clones x samples)
+    rank : int
+        Rank of low-dimensional background effect matrices A and B
+    clip_percentile : float
+        Elements with reconstruction errors above this percentile do not
+        contribute to the gradient. Aim for a lower-bound on the fraction
+        of entries you expect NOT to be hits.
+    learning_rate : float
+        Stochastic gradient descent (SGD) optimizer learning rate
+    minibatch_size : int
+        Number of rows per SGD minibatch
+    patience : int
+        Number of epochs without improvement in training loss to tolerate before
+        stopping
+    max_epochs : int
+        Maximum number of epochs
+    normalize_to_reads_per_million : boolean
+        Before computing factorization, first divide each column by the total
+        number of reads for that sample and multiple by 1 million.
+    log_every_seconds : float
+        Seconds to wait before printing another optimization status update
+
+    Returns
+    -------
+    pandas.DataFrame : residuals after correcting for batch effects
+
+    In addition to the clones x samples residuals, rows and columns named
+    "_background_0", "_background_1", ... giving the learned background vectors
+    are also included.
     """
 
     # Non-tf setup
