@@ -120,24 +120,24 @@ def gamma_poisson_model(input, output, trim_percentile, index_cols):
     help='output file or directory. If ends in .tsv, will be treated as file')
 @option('-d', '--index-cols', default=1,
     help='number of columns to use as index/row-key')
-@option('--rank', default=3,
+@option('--rank', default=3, show_default=True,
     help='matrix rank')
-@option('--clip-percentile', default=99.9,
+@option('--clip-percentile', default=99.9, show_default=True,
     help='percentile thershold to clip at')
-@option('--learning-rate', default=3.0,
+@option('--learning-rate', default=1.0, show_default=True,
     help='learning rate for Adam optimizer')
-@option('--minibatch-size', default=1024 * 32,
+@option('--minibatch-size', default=1024 * 32, show_default=True,
     help='rows per minibatch')
-@option('--patience', default=5,
+@option('--patience', default=5, show_default=True,
     help='number of epochs of no improvement to wait before early stopping')
-@option('--max-epochs', default=1000,
+@option('--max-epochs', default=1000, show_default=True,
     help='maximum epochs')
-@option('--discard-sample-reads-fraction', default=0.01,
+@option('--discard-sample-reads-fraction', default=0.01, show_default=True,
     help='Discard samples with fewer than X * m reads, where m is the median '
     'number of reads across samples')
 @option('--no-normalize-to-reads-per-million', is_flag=True,
         help='Work directly on read counts, not counts divided by sample totals')
-@option('--log-every-seconds', default=1,
+@option('--log-every-seconds', default=1, show_default=True,
     help='write progress no more often than every N seconds')
 def clipped_factorization_model(
         input,

@@ -111,7 +111,7 @@ def test_clipped_factorization_model():
         # the background matrix.
         assert_less(
             result_samples_df.values.flatten().mean(),
-            background_df.values.flatten().mean() / 10)
+            background_df.values.flatten().mean() / 2)
 
 
 
