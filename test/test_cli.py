@@ -114,4 +114,78 @@ def test_clipped_factorization_model():
             background_df.values.flatten().mean() / 2)
 
 
+def test_call_hits():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Check that accuracy is reasonable on a simulated dataset.
+        #
+        # We simulate background noise by first sampling a random mean for each
+        # phage clone (square of a normal distribution). We then sample beads-
+        # only and pull down (i.e. non-beads-only) count values from a poisson
+        # distribution centered at the given per-clone means. Finally, we
+        # corrupt a set number of entries, corresponding to our true hits.
+        #
+        num_clones = 20000
+        num_beads_only = 16
+        num_pull_down = 100
+        num_hits = 1000
 
+        data_df = pd.DataFrame(index=[
+            "clone_%d" % (i + 1) for i in range(num_clones)
+        ])
+        means = np.random.normal(0, 10, num_clones)**2
+        for i in range(num_beads_only):
+            data_df["beads_only_%d" % (i + 1)] = np.random.poisson(means)
+        for i in range(num_pull_down):
+            data_df["pull_down_%d" % (i + 1)] = np.random.poisson(means)
+
+        beads_only_samples = [c for c in data_df if c.startswith("beads")]
+        pull_down_samples = [c for c in data_df if c.startswith("pull_down")]
+
+        # Add some hits
+        hit_pairs = set()  # set of (sample, clone)
+        while len(hit_pairs) < num_hits:
+            sample = np.random.choice(pull_down_samples)
+            clone = np.random.choice(data_df.index)
+            data_df.loc[clone, sample] = (
+                data_df.loc[clone, sample]**2 + 100)
+            hit_pairs.add((sample, clone))
+
+        data_df.to_csv("input.tsv", sep="\t", index=True)
+        command_result = invoke_and_assert_success(
+            runner,
+            cli.call_hits, [
+                "-i", "input.tsv",
+                "-o", "output.tsv",
+                "--fdr", "0.15",
+        ])
+        print(command_result.output)
+        result_df = pd.read_table("output.tsv", index_col=0)
+        print(result_df)
+
+        result_df_with_actual_hits_zeroed_out = result_df.copy()
+        hit_values = []
+        for (sample, clone) in hit_pairs:
+            hit_values.append(result_df.loc[clone, sample])
+            result_df_with_actual_hits_zeroed_out.loc[clone, sample] = 0.0
+        hit_values = pd.Series(hit_values, index=hit_pairs)
+
+        sensitivity = (hit_values > 1.0).mean()
+        total_hits_called = (result_df > 1.0).sum().sum()
+        num_hit_calls_that_are_wrong = (
+            result_df_with_actual_hits_zeroed_out > 1.0).sum().sum()
+        num_actual_negatives = num_pull_down * num_hits - len(hit_pairs)
+        specificity = 1 - (num_hit_calls_that_are_wrong / num_actual_negatives)
+        empirical_fdr = num_hit_calls_that_are_wrong / total_hits_called
+
+        print(
+            "Sensitivity: %0.5f, specificity [%d false hits]: %0.5f, "
+            "empirical fdr: %0.5f" % (
+                sensitivity,
+                num_hit_calls_that_are_wrong,
+                specificity,
+                empirical_fdr))
+
+        assert_greater(sensitivity, 0.8)
+        assert_greater(specificity, 0.8)
+        assert_less(empirical_fdr, 0.3)
