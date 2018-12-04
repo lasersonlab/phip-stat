@@ -152,7 +152,16 @@ def clipped_factorization_model(
         discard_sample_reads_fraction,
         no_normalize_to_reads_per_million,
         log_every_seconds):
-    """Compute residuals from a clipped matrix factorization"""
+    """
+    Compute residuals from a clipped matrix factorization
+
+    Attempt to detect and correct for clone and sample batch effects by
+    subtracting off a learned low-rank reconstruction of the given counts matrix.
+
+    The result is the (clones x samples) matrix of residuals after correcting for
+    batch effects. A few additional rows and columns (named _background_0,
+    _background_1, ...) giving the learned effects are also included.
+    """
     import pandas as pd
     from .clipped_factorization import do_clipped_factorization
     counts = pd.read_csv(
