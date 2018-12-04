@@ -19,7 +19,7 @@ def invoke_and_assert_success(runner, command, args):
     return result
 
 
-def test_clipped_factorization_model():
+def Xtest_clipped_factorization_model():
     runner = CliRunner()
     with runner.isolated_filesystem():
         # We generate synthetic data by taking the outer product of two random
