@@ -11,10 +11,10 @@ from phip import cli
 
 def invoke_and_assert_success(runner, command, args):
     result = runner.invoke(command, args)
+    print(result.output)
     if result.exit_code != 0:
         print("Command failed [exit code %d]: %s %s" % (
             result.exit_code, str(command), str(args)))
-        print(result.output)
         raise result.exception
     return result
 
@@ -60,7 +60,6 @@ def test_clipped_factorization_model():
                 "--discard-sample-reads-fraction", "0.0",
                 "--no-normalize-to-reads-per-million",
         ])
-        print(command_result.output)
         result_df = pd.read_table("output.tsv", index_col=0)
         print(result_df)
 
@@ -88,7 +87,6 @@ def test_clipped_factorization_model():
                 "--discard-sample-reads-fraction", "0.0",
                 "--no-normalize-to-reads-per-million",
             ])
-        print(command_result.output)
         result_df = pd.read_table("output.tsv", index_col=0)
         print(result_df)
         result_samples_df = result_df.loc[
@@ -117,7 +115,8 @@ def test_clipped_factorization_model():
 def test_call_hits():
     runner = CliRunner()
     with runner.isolated_filesystem():
-        # Check that accuracy is reasonable on a simulated dataset.
+        # Check that hit calling accuracy is reasonable, both with and without
+        # the clipped factorization preprocessing step, on a simulated dataset.
         #
         # We simulate background noise by first sampling a random mean for each
         # phage clone (square of a normal distribution). We then sample beads-
@@ -125,7 +124,7 @@ def test_call_hits():
         # distribution centered at the given per-clone means. Finally, we
         # corrupt a set number of entries, corresponding to our true hits.
         #
-        num_clones = 20000
+        num_clones = 10000
         num_beads_only = 16
         num_pull_down = 100
         num_hits = 1000
@@ -152,40 +151,74 @@ def test_call_hits():
             hit_pairs.add((sample, clone))
 
         data_df.to_csv("input.tsv", sep="\t", index=True)
-        command_result = invoke_and_assert_success(
+
+        # Invocation 1: WITHOUT clipped factorization pre-processing step.
+        invoke_and_assert_success(
             runner,
             cli.call_hits, [
                 "-i", "input.tsv",
-                "-o", "output.tsv",
+                "-o", "hits.no_background_model.tsv",
                 "--fdr", "0.15",
         ])
-        print(command_result.output)
-        result_df = pd.read_table("output.tsv", index_col=0)
-        print(result_df)
 
-        result_df_with_actual_hits_zeroed_out = result_df.copy()
-        hit_values = []
-        for (sample, clone) in hit_pairs:
-            hit_values.append(result_df.loc[clone, sample])
-            result_df_with_actual_hits_zeroed_out.loc[clone, sample] = 0.0
-        hit_values = pd.Series(hit_values, index=hit_pairs)
+        # Run clipped factorization pre processing step.
+        invoke_and_assert_success(
+            runner,
+            cli.clipped_factorization_model, [
+                "-i", "input.tsv",
+                "-o", "residuals.tsv",
+                "--max-epochs", "100",
+                "--discard-sample-reads-fraction", "0.0"
+        ])
 
-        sensitivity = (hit_values > 1.0).mean()
-        total_hits_called = (result_df > 1.0).sum().sum()
-        num_hit_calls_that_are_wrong = (
-            result_df_with_actual_hits_zeroed_out > 1.0).sum().sum()
-        num_actual_negatives = num_pull_down * num_hits - len(hit_pairs)
-        specificity = 1 - (num_hit_calls_that_are_wrong / num_actual_negatives)
-        empirical_fdr = num_hit_calls_that_are_wrong / total_hits_called
+        # Invocation 2: WITH clipped factorization pre-processing step.
+        invoke_and_assert_success(
+            runner,
+            cli.call_hits, [
+                "-i", "residuals.tsv",
+                "-o", "hits.with_background_model.tsv",
+                "--fdr", "0.15",
+        ])
+        filenames = [
+            "hits.no_background_model.tsv",
+            "hits.with_background_model.tsv"
+        ]
 
-        print(
-            "Sensitivity: %0.5f, specificity [%d false hits]: %0.5f, "
-            "empirical fdr: %0.5f" % (
-                sensitivity,
-                num_hit_calls_that_are_wrong,
-                specificity,
-                empirical_fdr))
+        # Check accuracy of both hit calling runs.
+        for filename in filenames:
+            print("Checking hit calling results: %s" % filename)
+            result_df = pd.read_table(filename, index_col=0)
+            for col in result_df:
+                if col.startswith("_background"):
+                    del result_df[col]
+            result_df = result_df.loc[
+                ~result_df.index.str.startswith("_background")
+            ]
+            print(result_df)
 
-        assert_greater(sensitivity, 0.8)
-        assert_greater(specificity, 0.8)
-        assert_less(empirical_fdr, 0.3)
+            result_df_with_actual_hits_zeroed_out = result_df.copy()
+            hit_values = []
+            for (sample, clone) in hit_pairs:
+                hit_values.append(result_df.loc[clone, sample])
+                result_df_with_actual_hits_zeroed_out.loc[clone, sample] = 0.0
+            hit_values = pd.Series(hit_values, index=hit_pairs)
+
+            sensitivity = (hit_values > 1.0).mean()
+            total_hits_called = (result_df > 1.0).sum().sum()
+            num_hit_calls_that_are_wrong = (
+                result_df_with_actual_hits_zeroed_out > 1.0).sum().sum()
+            num_actual_negatives = num_pull_down * num_hits - len(hit_pairs)
+            specificity = 1 - (num_hit_calls_that_are_wrong / num_actual_negatives)
+            empirical_fdr = num_hit_calls_that_are_wrong / total_hits_called
+
+            print(
+                "Sensitivity: %0.5f, specificity [%d false hits]: %0.5f, "
+                "empirical fdr: %0.5f" % (
+                    sensitivity,
+                    num_hit_calls_that_are_wrong,
+                    specificity,
+                    empirical_fdr))
+
+            assert_greater(sensitivity, 0.8)
+            assert_greater(specificity, 0.8)
+            assert_less(empirical_fdr, 0.3)
