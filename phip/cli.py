@@ -153,7 +153,7 @@ def clipped_factorization_model(
         no_normalize_to_reads_per_million,
         log_every_seconds):
     """
-    Compute residuals from a clipped matrix factorization
+    Compute residuals from a matrix factorization
 
     Attempt to detect and correct for clone and sample batch effects by
     subtracting off a learned low-rank reconstruction of the given counts matrix.
