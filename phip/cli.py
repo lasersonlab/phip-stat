@@ -229,7 +229,20 @@ def call_hits(
         min_smoothing,
         max_smoothing,
         verbosity):
-    """Call hits at specified FDR"""
+    """
+    Call hits at specified FDR using a heuristic.
+
+    Either raw read counts or the result of the clipped-factorization-model
+    sub-command can be provided.
+
+    The result is a matrix of shape (clones x samples). Entries above 1.0 in
+    this matrix indicate hits. Higher values indicate more evidence for a
+    hit, but there is no simple interpretation of these values beyond whether
+    they are below/above 1.0.
+
+    See the documentation for `hit_calling.do_hit_calling()` for details on
+    the implementation.
+    """
     import pandas as pd
     import re
     from .hit_calling import do_hit_calling
@@ -273,8 +286,6 @@ def call_hits(
         beads_regex,
         len(beads_only_samples),
         " ".join(beads_only_samples)))
-    if len(beads_only_samples) < 2:
-        raise ValueError("At least 2 beads only samples are required.")
 
     result_df = do_hit_calling(
         counts,
