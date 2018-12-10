@@ -10,6 +10,7 @@ def do_hit_calling(
         beads_only_samples,
         fdr=0.15,
         smoothing_bracket=(0, 500),
+        normalize_to_reads_per_million=False,
         verbosity=2):
     """
     Call hits at the specified FDR using a heuristic.
@@ -79,6 +80,9 @@ def do_hit_calling(
     smoothing_bracket : tuple of float
         Initial estimate of smoothing values to consider. Selected smoothing
         value may or may not fall in this interval.
+    normalize_to_reads_per_million : boolean
+        If true, first divide each column by the total number of reads for that
+        sample and multiple by 1 million.
     verbosity : int
         verbosity: no output (0), result summary only (1), or progress (2)
 
@@ -93,6 +97,11 @@ def do_hit_calling(
     """
     if len(beads_only_samples) < 2:
         raise ValueError("At least two beads-only samples are required.")
+
+    if normalize_to_reads_per_million:
+        counts_df = (counts_df * 1e6 / counts_df.sum(0)).astype("float32")
+    else:
+        counts_df = counts_df.astype("float32")
 
     start = time.time()
 

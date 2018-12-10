@@ -150,6 +150,10 @@ def test_call_hits():
                 data_df.loc[clone, sample]**2 + 100)
             hit_pairs.add((sample, clone))
 
+        # Also to test that normalization works, make one beads-only sample way
+        # bigger than th eother columns.
+        data_df["beads_only_1"] *= 1e6
+
         data_df.to_csv("input.tsv", sep="\t", index=True)
 
         # Invocation 1: WITHOUT clipped factorization pre-processing step.
@@ -158,6 +162,7 @@ def test_call_hits():
             cli.call_hits, [
                 "-i", "input.tsv",
                 "-o", "hits.no_background_model.tsv",
+                "--normalize-to-reads-per-million",
                 "--fdr", "0.15",
         ])
 

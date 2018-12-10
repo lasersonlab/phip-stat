@@ -217,6 +217,10 @@ def clipped_factorization_model(
     help='minimum smoothing value')
 @option('--max-smoothing', default=500,
     help='maximum smoothing value')
+@option('--normalize-to-reads-per-million', is_flag=True,
+        help='Divide counts by totals per sample. Recommended '
+        'when running directly on raw read counts (as opposed to matrix '
+        'factorization residuals).')
 @option('--verbosity', default=2, show_default=True,
     help='verbosity: no output (0), result summary only (1), or progress (2)')
 def call_hits(
@@ -229,6 +233,7 @@ def call_hits(
         fdr,
         min_smoothing,
         max_smoothing,
+        normalize_to_reads_per_million,
         verbosity):
     """
     Call hits at specified FDR using a heuristic.
@@ -293,6 +298,7 @@ def call_hits(
         beads_only_samples=beads_only_samples,
         fdr=fdr,
         smoothing_bracket=(min_smoothing, max_smoothing),
+        normalize_to_reads_per_million=normalize_to_reads_per_million,
         verbosity=verbosity)
 
     full_result_df = original_counts.copy()
