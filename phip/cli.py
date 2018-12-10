@@ -206,10 +206,11 @@ def clipped_factorization_model(
 @option('--beads-regex', default=".*beads.*", show_default=True,
     help='samples with names matching this regex are considered beads-only')
 @option('--ignore-columns-regex', default="^_background.*", show_default=True,
-    help='ignore columns matching the given regex. Ignored columns are passed '
-    'through to output without processing.')
+    help='ignore columns matching the given regex (evaluated in case-insensitive'
+    ' mode.) Ignored columns are passed through to output without processing.')
 @option('--ignore-rows-regex', default="^_background.*", show_default=True,
-    help='ignore rows matching the given regex')
+    help='ignore rows matching the given regex (evaluated in case-insensitive '
+    'mode). Ignored rows are passed through to output without processing.')
 @option('--fdr', default=0.15, show_default=True,
     help='target false discovery rate')
 @option('--min-smoothing', default=0, show_default=True,
