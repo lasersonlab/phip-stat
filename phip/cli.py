@@ -303,7 +303,7 @@ def call_hits(
     else:
         os.makedirs(output)
         output_path = pjoin(output, "hits.tsv")
-    full_result_df.to_csv(output_path, sep='\t')
+    full_result_df.to_csv(output_path, sep='\t', float_format='%.4f')
     print("Wrote: %s" % output_path)
 
 
