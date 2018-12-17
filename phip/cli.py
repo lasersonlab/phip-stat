@@ -22,14 +22,21 @@ from os import path as osp
 from os.path import join as pjoin
 from glob import glob
 from subprocess import Popen, PIPE
+from functools import reduce
+import re
+
 if sys.version_info[0] == 2:
     from itertools import izip as zip
 
 from tqdm import tqdm
 from click import group, command, option, Path, Choice
 
-from phip.utils import compute_size_factors
+import pandas as pd
+import numpy as np
 
+from .utils import compute_size_factors
+from .clipped_factorization import do_clipped_factorization
+from .hit_calling import do_hit_calling, DEFAULT_FDR
 
 # handle gzipped or uncompressed files
 def open_maybe_compressed(*args, **kwargs):
@@ -101,8 +108,7 @@ def merge_kallisto_tpm(input, output):
         help='number of columns to use as index/row-key')
 def gamma_poisson_model(input, output, trim_percentile, index_cols):
     """compute -log10(pvals) with gamma-poisson model"""
-    import pandas as pd
-    from phip.gampois import gamma_poisson_model as model
+    from .gampois import gamma_poisson_model as model
     counts = pd.read_csv(input, sep='\t', header=0, index_col=list(range(index_cols)))
     os.makedirs(output, exist_ok=True)
     alpha, beta, rates, mlxp = model(counts, trim_percentile)
@@ -162,8 +168,6 @@ def clipped_factorization_model(
     batch effects. A few additional rows and columns (named _background_0,
     _background_1, ...) giving the learned effects are also included.
     """
-    import pandas as pd
-    from .clipped_factorization import do_clipped_factorization
     counts = pd.read_csv(
         input, sep='\t', header=0, index_col=list(range(index_cols)))
 
@@ -211,10 +215,8 @@ def clipped_factorization_model(
 @option('--ignore-rows-regex', default="^_background.*", show_default=True,
     help='ignore rows matching the given regex (evaluated in case-insensitive '
     'mode). Ignored rows are passed through to output without processing.')
-@option('--fdr', default=0.05, show_default=True,
+@option('--fdr', default=DEFAULT_FDR, show_default=True,
     help='target false discovery rate')
-@option('--min-pseudocount', default=0, show_default=True)
-@option('--max-pseudocount', default=500, show_default=True)
 @option('--normalize-to-reads-per-million',
         type=Choice(['always', 'never', 'guess']),
         default="guess",
@@ -234,8 +236,6 @@ def call_hits(
         ignore_columns_regex,
         ignore_rows_regex,
         fdr,
-        min_pseudocount,
-        max_pseudocount,
         normalize_to_reads_per_million,
         verbosity):
     """
@@ -252,9 +252,6 @@ def call_hits(
     See the documentation for `hit_calling.do_hit_calling()` for details on
     the implementation.
     """
-    import pandas as pd
-    import re
-    from .hit_calling import do_hit_calling
     original_counts = pd.read_csv(
         input, sep='\t', header=0, index_col=list(range(index_cols)))
     counts = original_counts
@@ -300,7 +297,6 @@ def call_hits(
         counts,
         beads_only_samples=beads_only_samples,
         fdr=fdr,
-        pseudocount_bracket=(min_pseudocount, max_pseudocount),
         normalize_to_reads_per_million={
             "always": True,
             "never": False,
@@ -356,11 +352,11 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
     This tool requires that the reads are presented in the same order in the
     two input files (which should be the case).
     """
-    from phip.utils import load_mapping, edit1_mapping
+    from .utils import load_mapping, edit1_mapping
     if no_wrap:
-        from phip.utils import read_fastq_nowrap as fastq_parser
+        from .utils import read_fastq_nowrap as fastq_parser
     else:
-        from phip.utils import readfq as fastq_parser
+        from .utils import readfq as fastq_parser
     os.makedirs(output, mode=0o755)
     input = osp.abspath(input)
     barcodes = osp.abspath(barcodes)
@@ -528,7 +524,6 @@ def gen_covariates(input, substring, output):
     of each row from the matching columns will be output into a tab-delim file.
     This file can be used as the "reference" values for computing p-values.
     """
-    import pandas as pd
     input_file = osp.abspath(input)
     output_file = osp.abspath(output)
     counts = pd.read_csv(input_file, sep='\t', header=0, index_col=0)
@@ -549,8 +544,7 @@ def gen_covariates(input, substring, output):
         help='Dry run; print out commands to execute for batch submit')
 def compute_pvals(input, output, batch_submit, dry_run):
     """(DEPRECATED) compute p-values from counts"""
-    import numpy as np
-    from phip.genpois import (
+    from .genpois import (
         estimate_GP_distributions, lambda_theta_regression, precompute_pvals)
     if batch_submit is not None:
         # run compute-pvals on each file using batch submit command
@@ -656,9 +650,6 @@ def merge_columns(input, output, method, position, index_cols):
                                  [f[position] for f in fields_array])
                 print('\t'.join(merged_fields), file=op)
     elif method == 'outer':
-        from functools import reduce
-        import pandas as pd
-
         def load(path):
             icols = list(range(index_cols))
             ucols = icols + [position]
@@ -685,7 +676,6 @@ def normalize_counts(input, output, method, index_cols):
     * Size factors from Anders and Huber 2010 (similar to TMM)
     * Normalize to constant column-sum of 1e6
     """
-    import pandas as pd
     df = pd.read_csv(input, sep='\t', header=0, index_col=list(range(index_cols)))
     if method == 'col-sum':
         normalized = df / (df.sum() / 1e6)
