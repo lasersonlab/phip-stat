@@ -211,16 +211,19 @@ def clipped_factorization_model(
 @option('--ignore-rows-regex', default="^_background.*", show_default=True,
     help='ignore rows matching the given regex (evaluated in case-insensitive '
     'mode). Ignored rows are passed through to output without processing.')
-@option('--fdr', default=0.15, show_default=True,
+@option('--fdr', default=0.05, show_default=True,
     help='target false discovery rate')
-@option('--min-smoothing', default=0, show_default=True,
-    help='minimum smoothing value')
-@option('--max-smoothing', default=500,
-    help='maximum smoothing value')
-@option('--normalize-to-reads-per-million', is_flag=True,
+@option('--min-pseudocount', default=0, show_default=True)
+@option('--max-pseudocount', default=500, show_default=True)
+@option('--normalize-to-reads-per-million',
+        type=Choice(['always', 'never', 'guess']),
+        default="guess",
+        show_default=True,
         help='Divide counts by totals per sample. Recommended '
         'when running directly on raw read counts (as opposed to matrix '
-        'factorization residuals).')
+        'factorization residuals). If set to "guess" then the counts matrix '
+        'will be left as-is if it contains negative entries, and otherwise '
+        'will be normalized.')
 @option('--verbosity', default=2, show_default=True,
     help='verbosity: no output (0), result summary only (1), or progress (2)')
 def call_hits(
@@ -231,8 +234,8 @@ def call_hits(
         ignore_columns_regex,
         ignore_rows_regex,
         fdr,
-        min_smoothing,
-        max_smoothing,
+        min_pseudocount,
+        max_pseudocount,
         normalize_to_reads_per_million,
         verbosity):
     """
@@ -297,8 +300,12 @@ def call_hits(
         counts,
         beads_only_samples=beads_only_samples,
         fdr=fdr,
-        smoothing_bracket=(min_smoothing, max_smoothing),
-        normalize_to_reads_per_million=normalize_to_reads_per_million,
+        pseudocount_bracket=(min_pseudocount, max_pseudocount),
+        normalize_to_reads_per_million={
+            "always": True,
+            "never": False,
+            "guess": None
+        }[normalize_to_reads_per_million],
         verbosity=verbosity)
 
     full_result_df = original_counts.copy()

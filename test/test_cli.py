@@ -162,7 +162,6 @@ def test_call_hits():
             cli.call_hits, [
                 "-i", "input.tsv",
                 "-o", "hits.no_background_model.tsv",
-                "--normalize-to-reads-per-million",
                 "--fdr", "0.15",
         ])
 
