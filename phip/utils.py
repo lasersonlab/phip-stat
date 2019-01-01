@@ -61,6 +61,7 @@ def compute_size_factors(counts):
     return np.ma.median(masked / geom_means, axis=0).data
 
 
+# fmt: off
 # https://github.com/lh3/readfq
 def readfq(fp): # this is a generator function
     last = None # this is a buffer keeping the last unprocessed line
@@ -92,18 +93,23 @@ def readfq(fp): # this is a generator function
             if last: # reach EOF before reading enough quality
                 yield name, seq, None # yield a fasta record instead
                 break
+# fmt: on
 
 
 def read_fastq_nowrap(fp):
-    for line in fp:
-        l1 = line.strip()
-        try:
-            l2 = next(fp).strip()
-            l3 = next(fp)
-            l4 = next(fp).strip()
-        except StopIteration:
-            raise ValueError('wrong number of lines')
-        if (l1[0] != '@') or (l3 != '+\n') or (len(l2) != len(l4)):
-            raise ValueError('error on record:\n{}\n{}\n{}{}'.format(
-                l1, l2, l3, l4))
-        yield (l1[1:], l2, l4)
+    raw = [None, None, None, None]
+    for (i, line) in enumerate(fp):
+        mod = i % 4
+        if mod == 0 and line[0] != '@':
+            raise ValueError(f'{line} expected to start with "@"')
+        if mod == 2 and line != '+\n':
+            raise ValueError(f'{line} expected to contain just "+"')
+        raw[mod] = line
+        if mod == 3:
+            rec = (raw[0][1:].rstrip(), raw[1].rstrip(), raw[3].rstrip())
+            if len(rec[1]) != len(rec[2]):
+                raise ValueError(f'{rec} seq and qual are diff length')
+            yield rec
+    else:
+        if mod != 3:
+            raise ValueError('wrong number of lines in file')

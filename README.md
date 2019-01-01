@@ -1,26 +1,22 @@
-# `phip-stat`: tools for analyzing PhIP-seq data
+# phip-stat: tools for analyzing PhIP-seq data
 
 The PhIP-seq assay was first described in [Larman et.
 al.](https://dx.doi.org/10.1038/nbt.1856). This repo contains code for
 processing raw PhIP-seq data into analysis-ready enrichment scores.
 
-The overall flow of the pipeline is for each sample
-
-1. quantify the number of reads observed for each possible peptide in the phage library (using kallisto), and
-2. convert those values to p-values by fitting to a Gamma-Poisson distribution
-
-An entire NextSeq run with 500M reads can be processed in <30 min on a 4-core laptop.
+This code also implements multiple statistical models for processing PhIP-seq
+data, including the model described in the original Larman et al paper
+(`generalized-poisson-model`).  We currently recommend using one of the newer
+models implemented here (e.g., `gamma-poisson-model`).
 
 Please submit [issues](https://github.com/lasersonlab/phip-stat/issues) to
-report any problems.  This code implements the statistical model as described
-in the original Larman et al paper.  There are multiple alternative models
-currently in development.
+report any problems.
 
 
 ## Installation
 
-`phip-stat` was developed with Python 3 but should also be compatible with
-Python 2. Please submit as issue if there are any problems.
+phip-stat runs on Python 3 and minimally depends on click, tqdm, numpy, scipy,
+and pandas. The matrix factorization model also requires tensorflow.
 
 ```bash
 pip install phip-stat
@@ -32,32 +28,28 @@ or to install the latest development version from GitHub
 pip install git+https://github.com/lasersonlab/phip-stat.git
 ```
 
-or download a release
-[directly from GitHub](https://github.com/lasersonlab/phip-stat/releases).
 
-Dependencies for `phip` (which should get installed by `pip`):
+## Usage
 
-*   `click`
-*   `biopython`
-*   `numpy`
-*   `scipy`
+The overall flow of the pipeline is
 
-Additionally, the pipeline makes use of `bowtie` for short read alignment, and
-expects it to be available on the `PATH`.
+1. "align" — for each sample count the number of reads derived from each
+   possible library member
 
-When running on a cluster, we assume that you can access a common filesystem
-from all nodes (e.g. NFS), which is common for academic HPC computing
-environments.  It is also important that the `phip-stat` package is installed
-into the Python distribution that will be invoked across the cluster.  We
-recommend `conda` for easily installing Python into a local user directory (see
-appendix).
+2. "merge" — combine the count values from all samples into a single count
+   matrix
+
+3. "model" — normalize counts and train a model to compute enrichment
+   scores/hits
+
+An entire NextSeq run with 500M reads can be processed in <30 min on a 4-core
+laptop (if aligning with a tool like kallisto).
 
 
-## Running the pipeline
+### Command-line interface
 
-All the pipeline tools are accessed through the executable `phip`.  (Your
-`PATH` may need to be modified to include the `bin/` directory of your Python
-installation.)  A list of commands can be obtained by passing `-h`.
+All the pipeline tools are accessed through the `phip` executable. All
+(sub)command usage/options can be obtained by passing `-h`.
 
 ```
 $ phip -h
@@ -78,111 +70,85 @@ Commands:
   split-fastq     split fastq files into smaller chunks
 ```
 
-Options/usage for a specific command can also be obtained with `-f`, for
-example:
+### Example: Exact-matching pipeline
 
-```
-$ phip split-fastq -h
-Usage: phip split-fastq [OPTIONS]
-
-  split fastq files into smaller chunks
-
-Options:
-  -i, --input TEXT          input path (fastq file)
-  -o, --output TEXT         output path (directory)
-  -n, --chunk-size INTEGER  number of reads per chunk
-  -h, --help                Show this message and exit.
-```
-
-
-### Pipeline inputs
-
-The PhIP-seq pipeline as implemented requires:
-
-1.  Read data from a PhIP-seq experiment (the raw data)
-
-2.  Reference file for PhIP-seq library or bowtie index for alignment
-
-3.  Input counts from sequencing the PhIP-seq library without any
-    immunoprecipitation
-
-
-### Generate per-sample alignment files
-
-If you start with a single `.fastq` file that contains all the reads together,
-we'll first split them into smaller chunks for alignment.
+This pipeline will match each read to the reference exactly (or a chosen subset
+of the read). The counts are merged and then normalized. The values are fit to a
+Gamma-Poisson empirical Bayes model.
 
 ```bash
-phip split-fastq -n 2000000 -i path/to/input.fastq -o path/to/workdir/parts
+# 1. align
+phip count-exact-matches -r reference.fasta -l 75 -o sample_counts/sample1.counts.tsv sample1.fastq.gz
+# ...
+phip count-exact-matches -r reference.fasta -l 75 -o sample_counts/sampleN.counts.tsv sampleN.fastq.gz
+
+# 2. merge
+phip merge-columns -m iter -i sample_counts -o counts.tsv
+
+# 3. model
+phip normalize-counts -m size-factors -i counts.tsv -o normalized_counts.tsv
+phip gamma-poisson-model -t 99.9 -i normalized_counts.tsv -o gamma-poisson
 ```
 
-We then align each read to the reference PhIP-seq library using `bowtie`
-(making sure to set the right queue):
+### Example: kallisto pipeline
+
+This pipeline will use kallisto to pseudoalign the reads to the reference.
+Because the output of each alignment step is a directory, the merge step uses a
+CLI tool designed for this directory structure. The counts are also
+pre-normalized.
 
 ```bash
-phip align-parts \
-    -i workdir/parts -o workdir/alns \
-    -x path/to/index \ # implying path/to/index.1.ebwt exists etc.
-    -b "bsub -q short"
+# 1. align
+kallisto quant --single --plaintext --fr-stranded -l 75 -s 0.1 -t 4 \
+    -i reference.idx -o sample_counts/sample1 sample1.fastq.gz
+# ...
+kallisto quant --single --plaintext --fr-stranded -l 75 -s 0.1 -t 4 \
+    -i reference.idx -o sample_counts/sampleN sampleN.fastq.gz
+
+# 2. merge
+phip merge-kallisto-tpm -i sample_counts -o cpm.tsv
+
+# 3. model
+phip gamma-poisson-model -t 99.9 -i cpm.tsv -o gamma-poisson
 ```
 
-Note: `align-parts` works by constructing a `bowtie` command and executing it
-by prefixing it with the command given in to the `-b` option.  Each invocation
-is executed and blocks to completion, which is instantaneous if submitting to a
-batch scheduler such as LSF (as shown).  If omitted or given whitespace as a
-string, each command will be executed serially.
+### Example: bowtie2 pipeline
 
-Next, we reorganize the resulting alignments by sample, assuming that the
-sample barcode is contained in the "query id" of each read.
+This example uses bowtie2, which should give the maximum sensitivity at the
+expense of speed. The main command accomplishes the following: align reads to
+reference, sort and convert to BAM, compute coverage depth at each position, for
+each "chromosome" (clone) take only the largest number observed, finally sort by
+clone identifier.
 
 ```bash
-phip groupby-sample -i workdir/alns -o workdir/alns_by_sample -m mapping.tsv
+# 1. align
+echo "id\tsample1" > sample_counts/sample1.tsv
+bowtie2 -p 4 -x reference_index -U sample1.fastq.gz \
+    | samtools sort -O BAM
+    | samtools depth -aa -m 100000000 {input} \
+    | awk 'BEGIN {OFS="\t"} {counts[$1] = ($3 < counts[$1]) ? counts[$1] : $3} END {for (c in counts) {print c, counts[c]}}' \
+    | sort -k 1 \
+    >> sample_counts/sample1.tsv
+# ...
+echo "id\tsampleN" > sample_counts/sampleN.tsv
+bowtie2 -p 4 -x reference_index -U sampleN.fastq.gz \
+    | samtools sort -O BAM
+    | samtools depth -aa -m 100000000 {input} \
+    | awk 'BEGIN {OFS="\t"} {counts[$1] = ($3 < counts[$1]) ? counts[$1] : $3} END {for (c in counts) {print c, counts[c]}}' \
+    | sort -k 1 \
+    >> sample_counts/sampleN.tsv
+
+# 2. merge -- NOTE: this performs a pandas outer join and loads all counts into memory
+phip merge-columns -m outer -i sample_counts -o counts.tsv
+
+# 3. model
+phip normalize-counts -m size-factors -i counts.tsv -o normalized_counts.tsv
+phip gamma-poisson-model -t 99.9 -i normalized_counts.tsv -o gamma-poisson
 ```
 
-The `mapping.tsv` file is a tab-delimited file whose first column is a list of
-barcode sequences and second column is a corresponding sample identifier (which
-should work nicely as a file name).
+### Snakemake recipes
 
-If you instead started this pipeline with pre-demultiplexed `.fastq` files, you
-can start with `align-parts` immediately and skip the `groupby-sample`.  We
-assume the sample identifier is the base part of the filename (e.g.,
-`sample1.fastq`).
-
-
-### Generating p-values for enrichments
-
-Once we have per-sample alignment files, we will generate count vectors for
-each sample followed by enrichment p-values (using the "input" vector for the
-particular phage library).
-
-```bash
-phip compute-counts \
-    -i workdir/alns_by_sample -o workdir/counts -r path/to/reference/counts.tsv
-```
-
-The count-generation is performed single-threaded/locally, but the p-value
-computation is more CPU-intensive so it can be parallelized with a job
-scheduler.
-
-```bash
-phip compute-pvals -i workdir/counts -o workdir/pvals -b "bsub -q short"
-```
-
-It schedules single-file p-value computations using the same command without
-the `-b`.  To manually compute p-values on just a single count file, execute
-
-```bash
-phip compute-pvals -i workdir/counts/sample1.counts.tsv -o sample1.pvals.tsv
-```
-
-Finally, the p-values from all samples can be merged into a single tab-
-delimited file:
-
-```bash
-phip merge-columns -i workdir/pvals -o pvals.tsv -p 1
-```
-
-The `-p 1` tells the command to take the 2nd column from each file (0-indexed).
+TODO
 
 ## Running unit tests
 Unit tests use the `nose` package and can be run with:
@@ -191,36 +157,3 @@ Unit tests use the `nose` package and can be run with:
 $ pip install nose  # if not already installed
 $ nosetests -sv test/
 ```
-
-## Appendix
-
-### Using `conda` for easily managing packages
-
-Conda is a package manager that works on multiple operating systems and is
-closely connected to the Anaconda and Miniconda distributions of Python. Using
-Conda makes it incredibly easy to install a full Python distribution into your
-local directory, along with all the heavy-weight packages. It also manages many
-non-Python packages, including bowtie, for exmaple.
-
-```bash
-curl https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh > miniconda3.sh
-bash miniconda3.sh -b -p $HOME/miniconda3
-# ADD $HOME/miniconda3/bin to your PATH in $HOME/.bash_profile
-conda install -y numpy scipy biopython click
-conda install -y bowtie
-```
-
-This will install Python 3 and bowtie into your home directory, completely
-isolated from the system Python installation.
-
-
-### Joining reads to barcodes/indexes on older Illumina data
-
-If you use the Basespace "generate fastq" pipeline or the MiSeq local pipeline
-for creating `.fastq` files on indexed runs, then reads that do not match an
-index (i.e., all of the reads if you will manually demultiplex) will go into an
-"Unidentified" file that does NOT include the index sequence for that read.
-Instead, the indexes are available in a separate `.fastq` file.  To use these
-data sets, the reads `.fastq` file must be rewritten to include the index
-sequence in the read header.  This can be accomplished with the `phip join-
-barcodes` command.

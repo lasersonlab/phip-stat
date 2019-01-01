@@ -21,22 +21,19 @@ import json
 from os import path as osp
 from os.path import join as pjoin
 from glob import glob
+from collections import Counter, OrderedDict
 from subprocess import Popen, PIPE
 from functools import reduce
 import re
 
-if sys.version_info[0] == 2:
-    from itertools import izip as zip
-
 from tqdm import tqdm
 from click import group, command, option, Path, Choice
-
 import pandas as pd
 import numpy as np
 
-from .utils import compute_size_factors
-from .clipped_factorization import do_clipped_factorization
-from .hit_calling import do_hit_calling, DEFAULT_FDR
+from phip.clipped_factorization import do_clipped_factorization
+from phip.hit_calling import do_hit_calling, DEFAULT_FDR
+from phip.utils import compute_size_factors, readfq
 
 # handle gzipped or uncompressed files
 def open_maybe_compressed(*args, **kwargs):
@@ -44,7 +41,8 @@ def open_maybe_compressed(*args, **kwargs):
         # gzip modes are different from default open modes
         if len(args[1]) == 1:
             args = (args[0], args[1] + 't') + args[2:]
-        return gzip.open(*args, **kwargs)
+        compresslevel = kwargs.pop('compresslevel', 6)
+        return gzip.open(*args, **kwargs, compresslevel=compresslevel)
     else:
         return open(*args, **kwargs)
 
@@ -64,10 +62,9 @@ def cli():
         help='length of starting subsequence to extract')
 def truncate_fasta(input, output, length):
     """truncate each sequence of a fasta file"""
-    from Bio import SeqIO
-    with open(output, 'w') as op:
-        for sr in SeqIO.parse(input, 'fasta'):
-            print(sr[:length].format('fasta'), end='', file=op)
+    with open(input, 'r') as ip, open(output, 'w') as op:
+        for (n, s, q) in readfq(ip):
+            print(f">{n}\n{s[:length]}", file=op)
 
 
 @cli.command(name='merge-kallisto-tpm')
@@ -397,23 +394,20 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
         help='number of reads per chunk')
 def split_fastq(input, output, chunk_size):
     """(DEPRECATED) split fastq files into smaller chunks"""
-    from Bio.SeqIO.QualityIO import FastqGeneralIterator
     input_file = osp.abspath(input)
     output_dir = osp.abspath(output)
     os.makedirs(output_dir, mode=0o755)
 
     # convenience functions
     output_file = lambda i: pjoin(output_dir, 'part.{0}.fastq'.format(i))
-    fastq_template = '@{0}\n{1}\n+\n{2}\n'.format
 
     with open_maybe_compressed(input_file, 'r') as input_handle:
         num_processed = 0
         file_num = 1
-        for record in FastqGeneralIterator(input_handle):
+        for (name, seq, qual) in readfq(input_handle):
             if num_processed == 0:
                 op = open_maybe_compressed(output_file(file_num), 'w')
-                write = op.write
-            write(fastq_template(*record))
+            print(f"@{name}\n{seq}\n+\n{qual}", file=op)
             num_processed += 1
             if num_processed == chunk_size:
                 op.close()
@@ -463,6 +457,45 @@ def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
             p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
                       universal_newlines=True)
             print(p.communicate()[0])
+
+
+@cli.command(name="count-exact-matches")
+@argument('input')
+@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
+        help='input fastq (gzipped ok)')
+@option('-o', '--input', required=True, type=Path(exists=True, dir_okay=False),
+        help='input fastq (gzipped ok)')
+@option('-r', '--reference', required=True, type=Path(exists=True, dir_okay=False),
+        help='path to reference (input) counts file (tab-delim)')
+@option('-l', '--read-length', required=True, type=int,
+        help="read length (or, number of bases to use for matching)")
+def count_exact_matches(input, reference, read_length):
+    # load reference
+    seq_to_ref = OrderedDict()
+    with open(reference, 'r') as ip:
+        for (ref_name, seq, _) in readfq(ip):
+            seq_to_ref[seq[:params.read_length]] = ref_name
+
+    num_reads = 0
+    num_matched = 0
+    counts = Counter()
+    with gzip.open(input, 'rt') as ip:
+        for (name, seq, _) in tqdm(readfq(ip)):
+            num_reads += 1
+            refname = seq_to_ref.get(seq)
+            if refname is not None:
+                num_matched += 1
+                counts[refname] += 1
+
+    print(
+        'num_reads: {}\nnum_matched: {}\nfrac_matched: {}'.format(
+            num_reads, num_matched, num_matched / num_reads),
+        file=sys.stderr)
+
+    with open(output[0], 'w') as op:
+        print('id\t{}'.format(wildcards.sample), file=op)
+        for (_, refname) in seq_to_ref.items():
+            print('{}\t{}'.format(refname, counts[refname]), file=op)
 
 
 @cli.command(name='compute-counts')
@@ -625,10 +658,13 @@ def compute_pvals(input, output, batch_submit, dry_run):
 @option('-d', '--index-cols', default=1,
         help='number of columns to use as index/row-key')
 def merge_columns(input, output, method, position, index_cols):
-    """merge tab-delim files
+    """merge tab-delimited files
+
+    input must be a directory containing `.tsv` files to merge.
 
     method: iter -- concurrently iterate over lines of all files; assumes
                     row-keys are identical in each file
+
     method: outer -- bona fide outer join of data in each file; loads all files
                      into memory and joins using pandas
     """
