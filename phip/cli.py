@@ -69,7 +69,7 @@ def cli():
     help="length of starting subsequence to extract",
 )
 def truncate_fasta(input, output, length):
-    """truncate each sequence of a fasta file"""
+    """Truncate each sequence of a fasta file."""
     with open(input, "r") as ip, open(output, "w") as op:
         for (n, s, q) in readfq(ip):
             print(f">{n}\n{s[:length]}", file=op)
@@ -85,7 +85,7 @@ def truncate_fasta(input, output, length):
 )
 @option("-o", "--output", required=True, type=Path(exists=False), help="output path")
 def merge_kallisto_tpm(input, output):
-    """merge kallisto abundance results
+    """Merge kallisto abundance results.
 
     Input directory should contain sample-named subdirectories, each containing
     an abundance.tsv file.  This command will generate a single tab-delim
@@ -127,8 +127,11 @@ def merge_kallisto_tpm(input, output):
     "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
 )
 def gamma_poisson_model(input, output, trim_percentile, index_cols):
-    """compute -log10(pvals) with gamma-poisson model"""
-    from .gampois import gamma_poisson_model as model
+    """Fit a gamma-poisson model.
+
+    Compute -log10(pval) for each (possibly-normalized) count.
+    """
+    from phip.gampois import gamma_poisson_model as model
 
     counts = pd.read_csv(input, sep="\t", header=0, index_col=list(range(index_cols)))
     os.makedirs(output, exist_ok=True)
@@ -219,11 +222,11 @@ def clipped_factorization_model(
     no_normalize_to_reads_per_million,
     log_every_seconds,
 ):
-    """
-    Compute residuals from a matrix factorization
+    """Fit matrix factorization model.
 
-    Attempt to detect and correct for clone and sample batch effects by
-    subtracting off a learned low-rank reconstruction of the given counts matrix.
+    Computes residuals from a matrix factorization model. Specifically, attempt
+    to detect and correct for clone and sample batch effects by subtracting off
+    a learned low-rank reconstruction of the given counts matrix.
 
     The result is the (clones x samples) matrix of residuals after correcting for
     batch effects. A few additional rows and columns (named _background_0,
@@ -334,8 +337,7 @@ def call_hits(
     normalize_to_reads_per_million,
     verbosity,
 ):
-    """
-    Call hits at specified FDR using a heuristic.
+    """Call hits at specified FDR using a heuristic.
 
     Either raw read counts or the result of the clipped-factorization-model
     sub-command can be provided.
@@ -457,7 +459,7 @@ def call_hits(
     help="fastq inputs are not wrapped (i.e., 4 lines per record)",
 )
 def zip_reads_barcodes(input, barcodes, mapping, output, compress_output, no_wrap):
-    """(RARELY) zip reads with barcodes and split into files
+    """Zip reads with barcodes and split into files.
 
     Some older versions of the Illumina pipeline would not annotate the reads
     with their corresponding barcodes, but would leave the barcode reads in a
@@ -472,6 +474,8 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output, no_wra
 
     This tool requires that the reads are presented in the same order in the
     two input files (which should be the case).
+
+    This tool should be used very rarely.
     """
     from .utils import load_mapping, edit1_mapping
 
@@ -514,15 +518,180 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output, no_wra
                 h.close()
 
 
+@cli.command(name="merge-columns")
+@option(
+    "-i", "--input", required=True, help="input path (directory of tab-delim files)"
+)
+@option("-o", "--output", required=True, help="output path")
+@option(
+    "-m",
+    "--method",
+    type=Choice(["iter", "outer"]),
+    default="iter",
+    help="merge/join method",
+)
+@option(
+    "-p",
+    "--position",
+    type=int,
+    default=1,
+    help="the field position to merge (0-indexed)",
+)
+@option(
+    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
+)
+def merge_columns(input, output, method, position, index_cols):
+    """Merge tab-delimited files.
+
+    input must be a directory containing `.tsv` files to merge.
+
+    method: iter -- concurrently iterate over lines of all files; assumes
+                    row-keys are identical in each file
+
+    method: outer -- bona fide outer join of data in each file; loads all files
+                     into memory and joins using pandas
+    """
+    input_dir = os.path.abspath(input)
+    output_file = os.path.abspath(output)
+    input_files = glob(pjoin(input_dir, "*.tsv"))
+    if method == "iter":
+        file_iterators = [open(f, "r") for f in input_files]
+        file_headers = [osp.splitext(osp.basename(f))[0] for f in input_files]
+        with open(output_file, "w") as op:
+            # iterate through lines
+            for lines in zip(*file_iterators):
+                fields_array = [
+                    [field.strip() for field in line.split("\t")] for line in lines
+                ]
+                # check that join column is the same
+                for fields in fields_array[1:]:
+                    assert fields_array[0][:index_cols] == fields[:index_cols]
+                merged_fields = fields_array[0][:index_cols] + [
+                    f[position] for f in fields_array
+                ]
+                print("\t".join(merged_fields), file=op)
+    elif method == "outer":
+
+        def load(path):
+            icols = list(range(index_cols))
+            ucols = icols + [position]
+            return pd.read_csv(
+                path, sep="\t", header=0, dtype=str, index_col=icols, usecols=ucols
+            )
+
+        dfs = [load(path) for path in input_files]
+        merge = lambda l, r: pd.merge(
+            l, r, how="outer", left_index=True, right_index=True
+        )
+        df = reduce(merge, dfs).fillna(0)
+        df.to_csv(output, sep="\t", float_format="%.2f")
+
+
+@cli.command(name="normalize-counts")
+@option("-i", "--input", required=True, help="input counts (tab-delim)")
+@option("-o", "--output", required=True, help="output path")
+@option(
+    "-m",
+    "--method",
+    type=Choice(["col-sum", "size-factors"]),
+    default="size-factors",
+    help="normalization method",
+)
+@option(
+    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
+)
+def normalize_counts(input, output, method, index_cols):
+    """Normalize count matrix.
+
+    Two methods for normalizing are available:
+    * Size factors from Anders and Huber 2010 (similar to TMM)
+    * Normalize to constant column-sum of 1e6
+    """
+    df = pd.read_csv(input, sep="\t", header=0, index_col=list(range(index_cols)))
+    if method == "col-sum":
+        normalized = df / (df.sum() / 1e6)
+    elif method == "size-factors":
+        factors = compute_size_factors(df.values)
+        normalized = df / factors
+    normalized.to_csv(output, sep="\t", float_format="%.2f")
+
+
+@cli.command(name="count-exact-matches")
+@option(
+    "-i",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input fastq (gzipped ok)",
+)
+@option(
+    "-o",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input fastq (gzipped ok)",
+)
+@option(
+    "-r",
+    "--reference",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="path to reference (input) counts file (tab-delim)",
+)
+@option(
+    "-l",
+    "--read-length",
+    required=True,
+    type=int,
+    help="read length (or, number of bases to use for matching)",
+    metavar="<read-length>",
+)
+def count_exact_matches(input, reference, read_length):
+    """Match reads to reference exactly.
+
+    Takes the first <read-length> bases of each read and attempt to match it
+    exactly to the reference sequences. Computes the number of matches for each
+    reference.
+    """
+    # load reference
+    seq_to_ref = OrderedDict()
+    with open(reference, "r") as ip:
+        for (ref_name, seq, _) in readfq(ip):
+            seq_to_ref[seq[: params.read_length]] = ref_name
+
+    num_reads = 0
+    num_matched = 0
+    counts = Counter()
+    with gzip.open(input, "rt") as ip:
+        for (name, seq, _) in tqdm(readfq(ip)):
+            num_reads += 1
+            refname = seq_to_ref.get(seq)
+            if refname is not None:
+                num_matched += 1
+                counts[refname] += 1
+
+    print(
+        "num_reads: {}\nnum_matched: {}\nfrac_matched: {}".format(
+            num_reads, num_matched, num_matched / num_reads
+        ),
+        file=sys.stderr,
+    )
+
+    with open(output[0], "w") as op:
+        print("id\t{}".format(wildcards.sample), file=op)
+        for (_, refname) in seq_to_ref.items():
+            print("{}\t{}".format(refname, counts[refname]), file=op)
+
+
 # DEPRECATED TOOLS
 
 
-@cli.command(name="split-fastq")
+@cli.command(name="split-fastq", deprecated=True)
 @option("-i", "--input", required=True, help="input path (fastq file)")
 @option("-o", "--output", required=True, help="output path (directory)")
 @option("-n", "--chunk-size", type=int, required=True, help="number of reads per chunk")
 def split_fastq(input, output, chunk_size):
-    """(DEPRECATED) split fastq files into smaller chunks"""
+    """Split fastq files into smaller chunks."""
     input_file = osp.abspath(input)
     output_dir = osp.abspath(output)
     os.makedirs(output_dir, mode=0o755)
@@ -546,7 +715,7 @@ def split_fastq(input, output, chunk_size):
             op.close()
 
 
-@cli.command(name="align-parts")
+@cli.command(name="align-parts", deprecated=True)
 @option("-i", "--input", required=True, help="input path (directory of fastq parts)")
 @option("-o", "--output", required=True, help="output path (directory)")
 @option(
@@ -572,7 +741,7 @@ def split_fastq(input, output, chunk_size):
 )
 @option("-d", "--dry-run", is_flag=True, help="Dry run; print out commands to execute")
 def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
-    """(DEPRECATED) align fastq files to peptide reference"""
+    """Align fastq files to peptide reference."""
     input_dir = osp.abspath(input)
     output_dir = osp.abspath(output)
     if not dry_run:
@@ -604,67 +773,7 @@ def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
             print(p.communicate()[0])
 
 
-@cli.command(name="count-exact-matches")
-@option(
-    "-i",
-    "--input",
-    required=True,
-    type=Path(exists=True, dir_okay=False),
-    help="input fastq (gzipped ok)",
-)
-@option(
-    "-o",
-    "--input",
-    required=True,
-    type=Path(exists=True, dir_okay=False),
-    help="input fastq (gzipped ok)",
-)
-@option(
-    "-r",
-    "--reference",
-    required=True,
-    type=Path(exists=True, dir_okay=False),
-    help="path to reference (input) counts file (tab-delim)",
-)
-@option(
-    "-l",
-    "--read-length",
-    required=True,
-    type=int,
-    help="read length (or, number of bases to use for matching)",
-)
-def count_exact_matches(input, reference, read_length):
-    # load reference
-    seq_to_ref = OrderedDict()
-    with open(reference, "r") as ip:
-        for (ref_name, seq, _) in readfq(ip):
-            seq_to_ref[seq[: params.read_length]] = ref_name
-
-    num_reads = 0
-    num_matched = 0
-    counts = Counter()
-    with gzip.open(input, "rt") as ip:
-        for (name, seq, _) in tqdm(readfq(ip)):
-            num_reads += 1
-            refname = seq_to_ref.get(seq)
-            if refname is not None:
-                num_matched += 1
-                counts[refname] += 1
-
-    print(
-        "num_reads: {}\nnum_matched: {}\nfrac_matched: {}".format(
-            num_reads, num_matched, num_matched / num_reads
-        ),
-        file=sys.stderr,
-    )
-
-    with open(output[0], "w") as op:
-        print("id\t{}".format(wildcards.sample), file=op)
-        for (_, refname) in seq_to_ref.items():
-            print("{}\t{}".format(refname, counts[refname]), file=op)
-
-
-@cli.command(name="compute-counts")
+@cli.command(name="compute-counts", deprecated=True)
 @option("-i", "--input", required=True, help="input path (directory of aln files)")
 @option("-o", "--output", required=True, help="output path (directory)")
 @option(
@@ -674,7 +783,7 @@ def count_exact_matches(input, reference, read_length):
     help="path to reference (input) counts file (tab-delim)",
 )
 def compute_counts(input, output, reference):
-    """(DEPRECATED) compute counts from aligned bam file"""
+    """Compute counts from aligned bam file."""
     input_dir = osp.abspath(input)
     output_dir = osp.abspath(output)
     os.makedirs(output_dir, mode=0o755)
@@ -712,14 +821,14 @@ def compute_counts(input, output, reference):
                 print(record, file=op)
 
 
-@cli.command(name="gen-covariates")
+@cli.command(name="gen-covariates", deprecated=True)
 @option("-i", "--input", required=True, help="input path to merged count file")
 @option(
     "-s", "--substring", required=True, help="substring to match against column names"
 )
 @option("-o", "--output", required=True, help="output file (recommend .tsv extension)")
 def gen_covariates(input, substring, output):
-    """(DEPRECATED) compute covariates for input to stat model
+    """Compute covariates for input to stat model.
 
     The input (`-i`) should be the merged counts file.  Each column name is
     matched against the given substring.  The median coverage-normalized value
@@ -737,7 +846,7 @@ def gen_covariates(input, substring, output):
     medians.to_csv(output_file, sep="\t", header=True, index_label="id")
 
 
-@cli.command(name="compute-pvals")
+@cli.command(name="compute-pvals", deprecated=True)
 @option("-i", "--input", required=True, help="input path")
 @option("-o", "--output", required=True, help="output path")
 @option(
@@ -752,7 +861,7 @@ def gen_covariates(input, substring, output):
     help="Dry run; print out commands to execute for batch submit",
 )
 def compute_pvals(input, output, batch_submit, dry_run):
-    """(DEPRECATED) compute p-values from counts"""
+    """Compute p-values from counts."""
     from .genpois import (
         estimate_GP_distributions,
         lambda_theta_regression,
@@ -826,101 +935,3 @@ def compute_pvals(input, output, batch_submit, dry_run):
                 for (i, oc) in enumerate(ocs):
                     fields.append("{:.2f}".format(log10pval_hash[(i, ic, oc)]))
                 print("\t".join(fields), file=op)
-
-
-@cli.command(name="merge-columns")
-@option(
-    "-i", "--input", required=True, help="input path (directory of tab-delim files)"
-)
-@option("-o", "--output", required=True, help="output path")
-@option(
-    "-m",
-    "--method",
-    type=Choice(["iter", "outer"]),
-    default="iter",
-    help="merge/join method",
-)
-@option(
-    "-p",
-    "--position",
-    type=int,
-    default=1,
-    help="the field position to merge (0-indexed)",
-)
-@option(
-    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
-)
-def merge_columns(input, output, method, position, index_cols):
-    """merge tab-delimited files
-
-    input must be a directory containing `.tsv` files to merge.
-
-    method: iter -- concurrently iterate over lines of all files; assumes
-                    row-keys are identical in each file
-
-    method: outer -- bona fide outer join of data in each file; loads all files
-                     into memory and joins using pandas
-    """
-    input_dir = os.path.abspath(input)
-    output_file = os.path.abspath(output)
-    input_files = glob(pjoin(input_dir, "*.tsv"))
-    if method == "iter":
-        file_iterators = [open(f, "r") for f in input_files]
-        file_headers = [osp.splitext(osp.basename(f))[0] for f in input_files]
-        with open(output_file, "w") as op:
-            # iterate through lines
-            for lines in zip(*file_iterators):
-                fields_array = [
-                    [field.strip() for field in line.split("\t")] for line in lines
-                ]
-                # check that join column is the same
-                for fields in fields_array[1:]:
-                    assert fields_array[0][:index_cols] == fields[:index_cols]
-                merged_fields = fields_array[0][:index_cols] + [
-                    f[position] for f in fields_array
-                ]
-                print("\t".join(merged_fields), file=op)
-    elif method == "outer":
-
-        def load(path):
-            icols = list(range(index_cols))
-            ucols = icols + [position]
-            return pd.read_csv(
-                path, sep="\t", header=0, dtype=str, index_col=icols, usecols=ucols
-            )
-
-        dfs = [load(path) for path in input_files]
-        merge = lambda l, r: pd.merge(
-            l, r, how="outer", left_index=True, right_index=True
-        )
-        df = reduce(merge, dfs).fillna(0)
-        df.to_csv(output, sep="\t", float_format="%.2f")
-
-
-@cli.command(name="normalize-counts")
-@option("-i", "--input", required=True, help="input counts (tab-delim)")
-@option("-o", "--output", required=True, help="output path")
-@option(
-    "-m",
-    "--method",
-    type=Choice(["col-sum", "size-factors"]),
-    default="size-factors",
-    help="normalization method",
-)
-@option(
-    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
-)
-def normalize_counts(input, output, method, index_cols):
-    """normalize count matrix
-
-    Two methods for normalizing are available:
-    * Size factors from Anders and Huber 2010 (similar to TMM)
-    * Normalize to constant column-sum of 1e6
-    """
-    df = pd.read_csv(input, sep="\t", header=0, index_col=list(range(index_cols)))
-    if method == "col-sum":
-        normalized = df / (df.sum() / 1e6)
-    elif method == "size-factors":
-        factors = compute_size_factors(df.values)
-        normalized = df / factors
-    normalized.to_csv(output, sep="\t", float_format="%.2f")
