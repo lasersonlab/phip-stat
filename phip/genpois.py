@@ -17,8 +17,6 @@
 from __future__ import print_function
 
 import sys
-if sys.version_info[0] == 2:
-    range = xrange
 
 import numpy as np
 import scipy as sp

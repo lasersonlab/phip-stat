@@ -13,11 +13,9 @@
 # limitations under the License.
 
 import numpy as np
+import pandas as pd
 import scipy as sp
 import scipy.stats
-import pandas as pd
-
-
 
 
 def poisson_logsf(counts, rate):

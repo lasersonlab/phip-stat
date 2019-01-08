@@ -1,8 +1,8 @@
+import math
 import time
 
 import numpy as np
 import pandas as pd
-import math
 from scipy.optimize import minimize_scalar
 
 from phip.utils import DEFAULT_FDR

@@ -14,24 +14,25 @@
 
 from __future__ import print_function
 
-import os
-import sys
 import gzip
 import json
+import os
+import re
+import sys
+from collections import Counter, OrderedDict
+from functools import reduce
+from glob import glob
 from os import path as osp
 from os.path import join as pjoin
-from glob import glob
-from collections import Counter, OrderedDict
-from subprocess import Popen, PIPE
-from functools import reduce
-import re
+from subprocess import PIPE, Popen
 
-from tqdm import tqdm
-from click import group, command, option, Path, Choice
-import pandas as pd
 import numpy as np
+import pandas as pd
+from click import Choice, Path, command, group, option
+from tqdm import tqdm
 
-from phip.utils import compute_size_factors, readfq, DEFAULT_FDR
+from phip.utils import DEFAULT_FDR, compute_size_factors, readfq
+
 
 # handle gzipped or uncompressed files
 def open_maybe_compressed(*args, **kwargs):

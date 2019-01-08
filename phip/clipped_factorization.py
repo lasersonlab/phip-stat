@@ -1,8 +1,7 @@
 import time
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 import tensorflow as tf
 from tensorflow.contrib.distributions import percentile
 
@@ -193,5 +192,3 @@ def do_clipped_factorization(
         results.loc[name] = best_b.loc[name]
 
     return results
-
-
