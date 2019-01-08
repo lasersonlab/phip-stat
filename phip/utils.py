@@ -18,10 +18,10 @@ DEFAULT_FDR = 0.01
 
 
 def one_base_mutants(seq):
-        alphabet = set(['A', 'C', 'G', 'T', 'N'])
-        for i in range(len(seq)):
-            for alt in alphabet - set([seq[i].upper()]):
-                yield seq[:i] + alt + seq[i + 1:]
+    alphabet = set(["A", "C", "G", "T", "N"])
+    for i in range(len(seq)):
+        for alt in alphabet - set([seq[i].upper()]):
+            yield seq[:i] + alt + seq[i + 1 :]
 
 
 def load_mapping(path):
@@ -31,9 +31,9 @@ def load_mapping(path):
     second column is the sample name.  No header line.
     """
     bc2sample = {}
-    with open(path, 'r') as ip:
+    with open(path, "r") as ip:
         for line in ip:
-            (bc, sample) = [field.strip() for field in line.split('\t')]
+            (bc, sample) = [field.strip() for field in line.split("\t")]
             bc2sample[bc] = sample
     return bc2sample
 
@@ -49,7 +49,8 @@ def edit1_mapping(mapping):
         for mut in one_base_mutants(bc):
             if mut in extended_mapping:
                 raise ValueError(
-                    '{} already in dict: BCs are within 1 edit'.format(mut))
+                    "{} already in dict: BCs are within 1 edit".format(mut)
+                )
             extended_mapping[mut] = mapping[bc]
     return extended_mapping
 
@@ -60,8 +61,13 @@ def compute_size_factors(counts):
     counts is a numpy array
     """
     import numpy as np
+
     masked = np.ma.masked_equal(counts, 0)
-    geom_means = np.ma.exp(np.ma.log(masked).sum(axis=1) / (~masked.mask).sum(axis=1)).data[np.newaxis].T
+    geom_means = (
+        np.ma.exp(np.ma.log(masked).sum(axis=1) / (~masked.mask).sum(axis=1))
+        .data[np.newaxis]
+        .T
+    )
     return np.ma.median(masked / geom_means, axis=0).data
 
 
@@ -104,16 +110,16 @@ def read_fastq_nowrap(fp):
     raw = [None, None, None, None]
     for (i, line) in enumerate(fp):
         mod = i % 4
-        if mod == 0 and line[0] != '@':
+        if mod == 0 and line[0] != "@":
             raise ValueError(f'{line} expected to start with "@"')
-        if mod == 2 and line != '+\n':
+        if mod == 2 and line != "+\n":
             raise ValueError(f'{line} expected to contain just "+"')
         raw[mod] = line
         if mod == 3:
             rec = (raw[0][1:].rstrip(), raw[1].rstrip(), raw[3].rstrip())
             if len(rec[1]) != len(rec[2]):
-                raise ValueError(f'{rec} seq and qual are diff length')
+                raise ValueError(f"{rec} seq and qual are diff length")
             yield rec
     else:
         if mod != 3:
-            raise ValueError('wrong number of lines in file')
+            raise ValueError("wrong number of lines in file")

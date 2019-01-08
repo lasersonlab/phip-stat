@@ -36,41 +36,54 @@ from phip.utils import DEFAULT_FDR, compute_size_factors, readfq
 
 # handle gzipped or uncompressed files
 def open_maybe_compressed(*args, **kwargs):
-    if args[0].endswith('.gz'):
+    if args[0].endswith(".gz"):
         # gzip modes are different from default open modes
         if len(args[1]) == 1:
-            args = (args[0], args[1] + 't') + args[2:]
-        compresslevel = kwargs.pop('compresslevel', 6)
+            args = (args[0], args[1] + "t") + args[2:]
+        compresslevel = kwargs.pop("compresslevel", 6)
         return gzip.open(*args, **kwargs, compresslevel=compresslevel)
     else:
         return open(*args, **kwargs)
 
 
-@group(context_settings={'help_option_names': ['-h', '--help']})
+@group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli():
     """phip -- PhIP-seq analysis tools"""
     pass
 
 
-@cli.command(name='truncate-fasta')
-@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
-        help='input fasta')
-@option('-o', '--output', required=True, type=Path(exists=False),
-        help='output fasta')
-@option('-k', '--length', required=True, type=int,
-        help='length of starting subsequence to extract')
+@cli.command(name="truncate-fasta")
+@option(
+    "-i",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input fasta",
+)
+@option("-o", "--output", required=True, type=Path(exists=False), help="output fasta")
+@option(
+    "-k",
+    "--length",
+    required=True,
+    type=int,
+    help="length of starting subsequence to extract",
+)
 def truncate_fasta(input, output, length):
     """truncate each sequence of a fasta file"""
-    with open(input, 'r') as ip, open(output, 'w') as op:
+    with open(input, "r") as ip, open(output, "w") as op:
         for (n, s, q) in readfq(ip):
             print(f">{n}\n{s[:length]}", file=op)
 
 
-@cli.command(name='merge-kallisto-tpm')
-@option('-i', '--input', required=True, type=Path(exists=True, file_okay=False),
-        help='input dir containing kallisto results')
-@option('-o', '--output', required=True, type=Path(exists=False),
-        help='output path')
+@cli.command(name="merge-kallisto-tpm")
+@option(
+    "-i",
+    "--input",
+    required=True,
+    type=Path(exists=True, file_okay=False),
+    help="input dir containing kallisto results",
+)
+@option("-o", "--output", required=True, type=Path(exists=False), help="output path")
 def merge_kallisto_tpm(input, output):
     """merge kallisto abundance results
 
@@ -79,81 +92,133 @@ def merge_kallisto_tpm(input, output):
     output file with each column containing the tpm values for that sample.
     """
     samples = os.listdir(input)
-    iterators = [open(pjoin(input, s, 'abundance.tsv'), 'r') for s in samples]
-    with open(output, 'w') as op:
+    iterators = [open(pjoin(input, s, "abundance.tsv"), "r") for s in samples]
+    with open(output, "w") as op:
         it = zip(*iterators)
         # burn headers of input files and write header of output file
         _ = next(it)
-        print('id\t{}'.format('\t'.join(samples)), file=op)
+        print("id\t{}".format("\t".join(samples)), file=op)
         for lines in it:
-            fields_array = [line.split('\t') for line in lines]
+            fields_array = [line.split("\t") for line in lines]
             # check that join column is the same
             assert all([fields[0] == fields_array[0][0] for fields in fields_array])
             merged_fields = [fields_array[0][0]] + [f[4].strip() for f in fields_array]
-            print('\t'.join(merged_fields), file=op)
+            print("\t".join(merged_fields), file=op)
 
 
-@cli.command(name='gamma-poisson-model')
-@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
-        help='input counts file (tab-delim)')
-@option('-o', '--output', required=True, type=Path(exists=False),
-        help='output directory')
-@option('-t', '--trim-percentile', default=99.9,
-        help='lower percent of data to keep for model fitting')
-@option('-d', '--index-cols', default=1,
-        help='number of columns to use as index/row-key')
+@cli.command(name="gamma-poisson-model")
+@option(
+    "-i",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input counts file (tab-delim)",
+)
+@option(
+    "-o", "--output", required=True, type=Path(exists=False), help="output directory"
+)
+@option(
+    "-t",
+    "--trim-percentile",
+    default=99.9,
+    help="lower percent of data to keep for model fitting",
+)
+@option(
+    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
+)
 def gamma_poisson_model(input, output, trim_percentile, index_cols):
     """compute -log10(pvals) with gamma-poisson model"""
     from .gampois import gamma_poisson_model as model
-    counts = pd.read_csv(input, sep='\t', header=0, index_col=list(range(index_cols)))
+
+    counts = pd.read_csv(input, sep="\t", header=0, index_col=list(range(index_cols)))
     os.makedirs(output, exist_ok=True)
     alpha, beta, rates, mlxp = model(counts, trim_percentile)
-    with open(pjoin(output, 'parameters.json'), 'w') as op:
+    with open(pjoin(output, "parameters.json"), "w") as op:
         json.dump(
-            {'alpha': alpha, 'beta': beta, 'trim_percentile': trim_percentile,
-             'background_rates': list(rates)}, op)
-    mlxp.to_csv(pjoin(output, 'mlxp.tsv'), sep='\t', float_format='%.2f')
+            {
+                "alpha": alpha,
+                "beta": beta,
+                "trim_percentile": trim_percentile,
+                "background_rates": list(rates),
+            },
+            op,
+        )
+    mlxp.to_csv(pjoin(output, "mlxp.tsv"), sep="\t", float_format="%.2f")
 
 
-@cli.command(name='clipped-factorization-model')
-@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
-    help='input counts file (tab-delim)')
-@option('-o', '--output', required=False, type=Path(exists=False),
-    help='output file or directory. If ends in .tsv, will be treated as file')
-@option('-d', '--index-cols', default=1,
-    help='number of columns to use as index/row-key')
-@option('--rank', default=3, show_default=True,
-    help='matrix rank')
-@option('--clip-percentile', default=99.9, show_default=True,
-    help='percentile thershold to clip at')
-@option('--learning-rate', default=1.0, show_default=True,
-    help='learning rate for Adam optimizer')
-@option('--minibatch-size', default=1024 * 32, show_default=True,
-    help='rows per minibatch')
-@option('--patience', default=5, show_default=True,
-    help='number of epochs of no improvement to wait before early stopping')
-@option('--max-epochs', default=1000, show_default=True,
-    help='maximum epochs')
-@option('--discard-sample-reads-fraction', default=0.01, show_default=True,
-    help='Discard samples with fewer than X * m reads, where m is the median '
-    'number of reads across samples')
-@option('--no-normalize-to-reads-per-million', is_flag=True,
-        help='Work directly on read counts, not counts divided by sample totals')
-@option('--log-every-seconds', default=1, show_default=True,
-    help='write progress no more often than every N seconds')
+@cli.command(name="clipped-factorization-model")
+@option(
+    "-i",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input counts file (tab-delim)",
+)
+@option(
+    "-o",
+    "--output",
+    required=False,
+    type=Path(exists=False),
+    help="output file or directory. If ends in .tsv, will be treated as file",
+)
+@option(
+    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
+)
+@option("--rank", default=3, show_default=True, help="matrix rank")
+@option(
+    "--clip-percentile",
+    default=99.9,
+    show_default=True,
+    help="percentile thershold to clip at",
+)
+@option(
+    "--learning-rate",
+    default=1.0,
+    show_default=True,
+    help="learning rate for Adam optimizer",
+)
+@option(
+    "--minibatch-size", default=1024 * 32, show_default=True, help="rows per minibatch"
+)
+@option(
+    "--patience",
+    default=5,
+    show_default=True,
+    help="number of epochs of no improvement to wait before early stopping",
+)
+@option("--max-epochs", default=1000, show_default=True, help="maximum epochs")
+@option(
+    "--discard-sample-reads-fraction",
+    default=0.01,
+    show_default=True,
+    help="Discard samples with fewer than X * m reads, where m is the median "
+    "number of reads across samples",
+)
+@option(
+    "--no-normalize-to-reads-per-million",
+    is_flag=True,
+    help="Work directly on read counts, not counts divided by sample totals",
+)
+@option(
+    "--log-every-seconds",
+    default=1,
+    show_default=True,
+    help="write progress no more often than every N seconds",
+)
 def clipped_factorization_model(
-        input,
-        output,
-        index_cols,
-        rank,
-        clip_percentile,
-        learning_rate,
-        minibatch_size,
-        patience,
-        max_epochs,
-        discard_sample_reads_fraction,
-        no_normalize_to_reads_per_million,
-        log_every_seconds):
+    input,
+    output,
+    index_cols,
+    rank,
+    clip_percentile,
+    learning_rate,
+    minibatch_size,
+    patience,
+    max_epochs,
+    discard_sample_reads_fraction,
+    no_normalize_to_reads_per_million,
+    log_every_seconds,
+):
     """
     Compute residuals from a matrix factorization
 
@@ -166,16 +231,17 @@ def clipped_factorization_model(
     """
     from phip.clipped_factorization import do_clipped_factorization
 
-    counts = pd.read_csv(
-        input, sep='\t', header=0, index_col=list(range(index_cols)))
+    counts = pd.read_csv(input, sep="\t", header=0, index_col=list(range(index_cols)))
 
     total_reads = counts.sum()
     expected_reads = total_reads.median()
     for sample in counts.columns:
         if total_reads[sample] / expected_reads < discard_sample_reads_fraction:
-            print("[!!] EXCLUDING SAMPLE %s DUE TO INSUFFICIENT READS "
-                  "(%d vs. sample median %d)" % (
-                sample, total_reads[sample], expected_reads))
+            print(
+                "[!!] EXCLUDING SAMPLE %s DUE TO INSUFFICIENT READS "
+                "(%d vs. sample median %d)"
+                % (sample, total_reads[sample], expected_reads)
+            )
             del counts[sample]
 
     result_df = do_clipped_factorization(
@@ -187,55 +253,87 @@ def clipped_factorization_model(
         patience=patience,
         max_epochs=max_epochs,
         normalize_to_reads_per_million=not no_normalize_to_reads_per_million,
-        log_every_seconds=log_every_seconds)
+        log_every_seconds=log_every_seconds,
+    )
 
     if output.endswith(".tsv"):
         output_path = output
     else:
         os.makedirs(output)
         output_path = pjoin(output, "mixture.tsv")
-    result_df.to_csv(output_path, sep='\t', float_format='%.2f')
+    result_df.to_csv(output_path, sep="\t", float_format="%.2f")
     print("Wrote: %s" % output_path)
 
 
-@cli.command(name='call-hits')
-@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
-    help='input counts file (tab-delim)')
-@option('-o', '--output', required=False, type=Path(exists=False),
-    help='output file or directory. If ends in .tsv, will be treated as file')
-@option('-d', '--index-cols', default=1,
-    help='number of columns to use as index/row-key')
-@option('--beads-regex', default=".*beads.*", show_default=True,
-    help='samples with names matching this regex are considered beads-only')
-@option('--ignore-columns-regex', default="^_background.*", show_default=True,
-    help='ignore columns matching the given regex (evaluated in case-insensitive'
-    ' mode.) Ignored columns are passed through to output without processing.')
-@option('--ignore-rows-regex', default="^_background.*", show_default=True,
-    help='ignore rows matching the given regex (evaluated in case-insensitive '
-    'mode). Ignored rows are passed through to output without processing.')
-@option('--fdr', default=DEFAULT_FDR, show_default=True,
-    help='target false discovery rate')
-@option('--normalize-to-reads-per-million',
-        type=Choice(['always', 'never', 'guess']),
-        default="guess",
-        show_default=True,
-        help='Divide counts by totals per sample. Recommended '
-        'when running directly on raw read counts (as opposed to matrix '
-        'factorization residuals). If set to "guess" then the counts matrix '
-        'will be left as-is if it contains negative entries, and otherwise '
-        'will be normalized.')
-@option('--verbosity', default=2, show_default=True,
-    help='verbosity: no output (0), result summary only (1), or progress (2)')
+@cli.command(name="call-hits")
+@option(
+    "-i",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input counts file (tab-delim)",
+)
+@option(
+    "-o",
+    "--output",
+    required=False,
+    type=Path(exists=False),
+    help="output file or directory. If ends in .tsv, will be treated as file",
+)
+@option(
+    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
+)
+@option(
+    "--beads-regex",
+    default=".*beads.*",
+    show_default=True,
+    help="samples with names matching this regex are considered beads-only",
+)
+@option(
+    "--ignore-columns-regex",
+    default="^_background.*",
+    show_default=True,
+    help="ignore columns matching the given regex (evaluated in case-insensitive"
+    " mode.) Ignored columns are passed through to output without processing.",
+)
+@option(
+    "--ignore-rows-regex",
+    default="^_background.*",
+    show_default=True,
+    help="ignore rows matching the given regex (evaluated in case-insensitive "
+    "mode). Ignored rows are passed through to output without processing.",
+)
+@option(
+    "--fdr", default=DEFAULT_FDR, show_default=True, help="target false discovery rate"
+)
+@option(
+    "--normalize-to-reads-per-million",
+    type=Choice(["always", "never", "guess"]),
+    default="guess",
+    show_default=True,
+    help="Divide counts by totals per sample. Recommended "
+    "when running directly on raw read counts (as opposed to matrix "
+    'factorization residuals). If set to "guess" then the counts matrix '
+    "will be left as-is if it contains negative entries, and otherwise "
+    "will be normalized.",
+)
+@option(
+    "--verbosity",
+    default=2,
+    show_default=True,
+    help="verbosity: no output (0), result summary only (1), or progress (2)",
+)
 def call_hits(
-        input,
-        output,
-        index_cols,
-        beads_regex,
-        ignore_columns_regex,
-        ignore_rows_regex,
-        fdr,
-        normalize_to_reads_per_million,
-        verbosity):
+    input,
+    output,
+    index_cols,
+    beads_regex,
+    ignore_columns_regex,
+    ignore_rows_regex,
+    fdr,
+    normalize_to_reads_per_million,
+    verbosity,
+):
     """
     Call hits at specified FDR using a heuristic.
 
@@ -253,56 +351,60 @@ def call_hits(
     from phip.hit_calling import do_hit_calling
 
     original_counts = pd.read_csv(
-        input, sep='\t', header=0, index_col=list(range(index_cols)))
+        input, sep="\t", header=0, index_col=list(range(index_cols))
+    )
     counts = original_counts
     print("Read input matrix: %d clones x %d samples." % counts.shape)
     print("Columns: %s" % " ".join(counts.columns))
 
     columns_to_ignore = [
-        s for s in counts.columns
-        if ignore_columns_regex and re.match(
-            ignore_columns_regex, s, flags=re.IGNORECASE)
+        s
+        for s in counts.columns
+        if ignore_columns_regex
+        and re.match(ignore_columns_regex, s, flags=re.IGNORECASE)
     ]
     if columns_to_ignore:
-        print("Ignoring %d columns matching regex '%s': %s" % (
-            len(columns_to_ignore),
-            ignore_columns_regex,
-            " ".join(columns_to_ignore)))
-        counts = counts[
-            [c for c in counts.columns if c not in columns_to_ignore]
-        ]
+        print(
+            "Ignoring %d columns matching regex '%s': %s"
+            % (
+                len(columns_to_ignore),
+                ignore_columns_regex,
+                " ".join(columns_to_ignore),
+            )
+        )
+        counts = counts[[c for c in counts.columns if c not in columns_to_ignore]]
 
     rows_to_ignore = [
-        s for s in counts.index
-        if ignore_rows_regex and index_cols == 1 and re.match(
-            ignore_rows_regex, s, flags=re.IGNORECASE)
+        s
+        for s in counts.index
+        if ignore_rows_regex
+        and index_cols == 1
+        and re.match(ignore_rows_regex, s, flags=re.IGNORECASE)
     ]
     if rows_to_ignore:
-        print("Ignoring %d rows matching regex '%s': %s" % (
-            len(rows_to_ignore),
-            ignore_rows_regex,
-            " ".join(rows_to_ignore)))
+        print(
+            "Ignoring %d rows matching regex '%s': %s"
+            % (len(rows_to_ignore), ignore_rows_regex, " ".join(rows_to_ignore))
+        )
         counts = counts.loc[~counts.index.isin(rows_to_ignore)]
 
     beads_only_samples = [
-        s for s in counts.columns
-        if re.match(beads_regex, s, flags=re.IGNORECASE)
+        s for s in counts.columns if re.match(beads_regex, s, flags=re.IGNORECASE)
     ]
-    print("Beads-only regex '%s' matched %d samples: %s" % (
-        beads_regex,
-        len(beads_only_samples),
-        " ".join(beads_only_samples)))
+    print(
+        "Beads-only regex '%s' matched %d samples: %s"
+        % (beads_regex, len(beads_only_samples), " ".join(beads_only_samples))
+    )
 
     result_df = do_hit_calling(
         counts,
         beads_only_samples=beads_only_samples,
         fdr=fdr,
-        normalize_to_reads_per_million={
-            "always": True,
-            "never": False,
-            "guess": None
-        }[normalize_to_reads_per_million],
-        verbosity=verbosity)
+        normalize_to_reads_per_million={"always": True, "never": False, "guess": None}[
+            normalize_to_reads_per_million
+        ],
+        verbosity=verbosity,
+    )
 
     full_result_df = original_counts.copy()
     for column in result_df.columns:
@@ -313,29 +415,48 @@ def call_hits(
     else:
         os.makedirs(output)
         output_path = pjoin(output, "hits.tsv")
-    full_result_df.to_csv(output_path, sep='\t', float_format='%.4f')
+    full_result_df.to_csv(output_path, sep="\t", float_format="%.4f")
     print("Wrote: %s" % output_path)
 
 
 # TOOLS THAT SHOULD BE USED RARELY
 
 
-@cli.command(name='zip-reads-and-barcodes')
-@option('-i', '--input', type=Path(exists=True, dir_okay=False), required=True,
-        help='reads fastq file')
-@option('-b', '--barcodes', type=Path(exists=True, dir_okay=False),
-        required=True, help='indexes/barcodes fastq file')
-@option('-m', '--mapping', type=Path(exists=True, dir_okay=False),
-        required=True,
-        help='barcode to sample mapping (tab-delim, no header line)')
-@option('-o', '--output', type=Path(exists=False),
-        required=True, help='output directory')
-@option('-z', '--compress-output', is_flag=True,
-        help='gzip-compress output fastq files')
-@option('-n', '--no-wrap', is_flag=True,
-        help='fastq inputs are not wrapped (i.e., 4 lines per record)')
-def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
-                       no_wrap):
+@cli.command(name="zip-reads-and-barcodes")
+@option(
+    "-i",
+    "--input",
+    type=Path(exists=True, dir_okay=False),
+    required=True,
+    help="reads fastq file",
+)
+@option(
+    "-b",
+    "--barcodes",
+    type=Path(exists=True, dir_okay=False),
+    required=True,
+    help="indexes/barcodes fastq file",
+)
+@option(
+    "-m",
+    "--mapping",
+    type=Path(exists=True, dir_okay=False),
+    required=True,
+    help="barcode to sample mapping (tab-delim, no header line)",
+)
+@option(
+    "-o", "--output", type=Path(exists=False), required=True, help="output directory"
+)
+@option(
+    "-z", "--compress-output", is_flag=True, help="gzip-compress output fastq files"
+)
+@option(
+    "-n",
+    "--no-wrap",
+    is_flag=True,
+    help="fastq inputs are not wrapped (i.e., 4 lines per record)",
+)
+def zip_reads_barcodes(input, barcodes, mapping, output, compress_output, no_wrap):
     """(RARELY) zip reads with barcodes and split into files
 
     Some older versions of the Illumina pipeline would not annotate the reads
@@ -353,6 +474,7 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
     two input files (which should be the case).
     """
     from .utils import load_mapping, edit1_mapping
+
     if no_wrap:
         from .utils import read_fastq_nowrap as fastq_parser
     else:
@@ -364,22 +486,27 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
     # generate all possible edit-1 BCs
     bc2sample = edit1_mapping(load_mapping(mapping))
 
-    with open_maybe_compressed(input, 'r') as r_h, open_maybe_compressed(barcodes, 'r') as b_h:
+    with open_maybe_compressed(input, "r") as r_h, open_maybe_compressed(
+        barcodes, "r"
+    ) as b_h:
         # open file handles for each sample
-        ext = 'fastq.gz' if compress_output else 'fastq'
+        ext = "fastq.gz" if compress_output else "fastq"
         output_handles = {
             s: open_maybe_compressed(
-                pjoin(output, '{s}.{ext}'.format(s=s, ext=ext)), 'w')
+                pjoin(output, "{s}.{ext}".format(s=s, ext=ext)), "w"
+            )
             for s in set(bc2sample.values())
         }
         try:
-            for (r_n, r_s, r_q), (b_n, b_s, b_q) in zip(tqdm(fastq_parser(r_h)), fastq_parser(b_h)):
+            for (r_n, r_s, r_q), (b_n, b_s, b_q) in zip(
+                tqdm(fastq_parser(r_h)), fastq_parser(b_h)
+            ):
                 assert r_n.split(maxsplit=1)[0] == b_n.split(maxsplit=1)[0]
                 try:
                     print(
-                        '@{r_n}\n{r_s}\n+\n{r_q}'.format(
-                            r_n=r_n, r_s=r_s, r_q=r_q),
-                        file=output_handles[bc2sample[b_s]])
+                        "@{r_n}\n{r_s}\n+\n{r_q}".format(r_n=r_n, r_s=r_s, r_q=r_q),
+                        file=output_handles[bc2sample[b_s]],
+                    )
                 except KeyError:
                     continue
         finally:
@@ -390,11 +517,10 @@ def zip_reads_barcodes(input, barcodes, mapping, output, compress_output,
 # DEPRECATED TOOLS
 
 
-@cli.command(name='split-fastq')
-@option('-i', '--input', required=True, help='input path (fastq file)')
-@option('-o', '--output', required=True, help='output path (directory)')
-@option('-n', '--chunk-size', type=int, required=True,
-        help='number of reads per chunk')
+@cli.command(name="split-fastq")
+@option("-i", "--input", required=True, help="input path (fastq file)")
+@option("-o", "--output", required=True, help="output path (directory)")
+@option("-n", "--chunk-size", type=int, required=True, help="number of reads per chunk")
 def split_fastq(input, output, chunk_size):
     """(DEPRECATED) split fastq files into smaller chunks"""
     input_file = osp.abspath(input)
@@ -402,14 +528,14 @@ def split_fastq(input, output, chunk_size):
     os.makedirs(output_dir, mode=0o755)
 
     # convenience functions
-    output_file = lambda i: pjoin(output_dir, 'part.{0}.fastq'.format(i))
+    output_file = lambda i: pjoin(output_dir, "part.{0}.fastq".format(i))
 
-    with open_maybe_compressed(input_file, 'r') as input_handle:
+    with open_maybe_compressed(input_file, "r") as input_handle:
         num_processed = 0
         file_num = 1
         for (name, seq, qual) in readfq(input_handle):
             if num_processed == 0:
-                op = open_maybe_compressed(output_file(file_num), 'w')
+                op = open_maybe_compressed(output_file(file_num), "w")
             print(f"@{name}\n{seq}\n+\n{qual}", file=op)
             num_processed += 1
             if num_processed == chunk_size:
@@ -420,21 +546,31 @@ def split_fastq(input, output, chunk_size):
             op.close()
 
 
-@cli.command(name='align-parts')
-@option('-i', '--input', required=True,
-        help='input path (directory of fastq parts)')
-@option('-o', '--output', required=True,
-        help='output path (directory)')
-@option('-x', '--index', required=True,
-        help='bowtie index (e.g., as specified to bowtie2)')
-@option('-b', '--batch-submit', default='',
-        help='batch submit command to prefix bowtie command invocation')
-@option('-p', '--threads', default=1,
-        help='Number of threads to specify for each invocation of bowtie')
-@option('-3', '--trim3', default=0,
-        help='Number of bases to trim off of 3-end (passed to bowtie)')
-@option('-d', '--dry-run', is_flag=True,
-        help='Dry run; print out commands to execute')
+@cli.command(name="align-parts")
+@option("-i", "--input", required=True, help="input path (directory of fastq parts)")
+@option("-o", "--output", required=True, help="output path (directory)")
+@option(
+    "-x", "--index", required=True, help="bowtie index (e.g., as specified to bowtie2)"
+)
+@option(
+    "-b",
+    "--batch-submit",
+    default="",
+    help="batch submit command to prefix bowtie command invocation",
+)
+@option(
+    "-p",
+    "--threads",
+    default=1,
+    help="Number of threads to specify for each invocation of bowtie",
+)
+@option(
+    "-3",
+    "--trim3",
+    default=0,
+    help="Number of bases to trim off of 3-end (passed to bowtie)",
+)
+@option("-d", "--dry-run", is_flag=True, help="Dry run; print out commands to execute")
 def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
     """(DEPRECATED) align fastq files to peptide reference"""
     input_dir = osp.abspath(input)
@@ -442,46 +578,72 @@ def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
     if not dry_run:
         os.makedirs(output_dir, mode=0o755)
     bowtie_cmd_template = (
-        'bowtie -n 3 -l 100 --best --nomaqround --norc -k 1 -p {threads} '
-        '-3 {trim3} --quiet {index} {input} {output}')
-    for input_file in glob(pjoin(input_dir, '*.fastq')):
-        output_file = pjoin(output_dir,
-                            osp.splitext(osp.basename(input_file))[0] + '.aln')
-        bowtie_cmd = bowtie_cmd_template.format(index=index,
-                                                input=input_file,
-                                                output=output_file,
-                                                threads=threads,
-                                                trim3=trim3)
-        submit_cmd = '{batch_cmd} {app_cmd}'.format(batch_cmd=batch_submit,
-                                                    app_cmd=bowtie_cmd)
+        "bowtie -n 3 -l 100 --best --nomaqround --norc -k 1 -p {threads} "
+        "-3 {trim3} --quiet {index} {input} {output}"
+    )
+    for input_file in glob(pjoin(input_dir, "*.fastq")):
+        output_file = pjoin(
+            output_dir, osp.splitext(osp.basename(input_file))[0] + ".aln"
+        )
+        bowtie_cmd = bowtie_cmd_template.format(
+            index=index,
+            input=input_file,
+            output=output_file,
+            threads=threads,
+            trim3=trim3,
+        )
+        submit_cmd = "{batch_cmd} {app_cmd}".format(
+            batch_cmd=batch_submit, app_cmd=bowtie_cmd
+        )
         if dry_run:
             print(submit_cmd.strip())
         else:
-            p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
-                      universal_newlines=True)
+            p = Popen(
+                submit_cmd.strip(), shell=True, stdout=PIPE, universal_newlines=True
+            )
             print(p.communicate()[0])
 
 
 @cli.command(name="count-exact-matches")
-@option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
-        help='input fastq (gzipped ok)')
-@option('-o', '--input', required=True, type=Path(exists=True, dir_okay=False),
-        help='input fastq (gzipped ok)')
-@option('-r', '--reference', required=True, type=Path(exists=True, dir_okay=False),
-        help='path to reference (input) counts file (tab-delim)')
-@option('-l', '--read-length', required=True, type=int,
-        help="read length (or, number of bases to use for matching)")
+@option(
+    "-i",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input fastq (gzipped ok)",
+)
+@option(
+    "-o",
+    "--input",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="input fastq (gzipped ok)",
+)
+@option(
+    "-r",
+    "--reference",
+    required=True,
+    type=Path(exists=True, dir_okay=False),
+    help="path to reference (input) counts file (tab-delim)",
+)
+@option(
+    "-l",
+    "--read-length",
+    required=True,
+    type=int,
+    help="read length (or, number of bases to use for matching)",
+)
 def count_exact_matches(input, reference, read_length):
     # load reference
     seq_to_ref = OrderedDict()
-    with open(reference, 'r') as ip:
+    with open(reference, "r") as ip:
         for (ref_name, seq, _) in readfq(ip):
-            seq_to_ref[seq[:params.read_length]] = ref_name
+            seq_to_ref[seq[: params.read_length]] = ref_name
 
     num_reads = 0
     num_matched = 0
     counts = Counter()
-    with gzip.open(input, 'rt') as ip:
+    with gzip.open(input, "rt") as ip:
         for (name, seq, _) in tqdm(readfq(ip)):
             num_reads += 1
             refname = seq_to_ref.get(seq)
@@ -490,22 +652,27 @@ def count_exact_matches(input, reference, read_length):
                 counts[refname] += 1
 
     print(
-        'num_reads: {}\nnum_matched: {}\nfrac_matched: {}'.format(
-            num_reads, num_matched, num_matched / num_reads),
-        file=sys.stderr)
+        "num_reads: {}\nnum_matched: {}\nfrac_matched: {}".format(
+            num_reads, num_matched, num_matched / num_reads
+        ),
+        file=sys.stderr,
+    )
 
-    with open(output[0], 'w') as op:
-        print('id\t{}'.format(wildcards.sample), file=op)
+    with open(output[0], "w") as op:
+        print("id\t{}".format(wildcards.sample), file=op)
         for (_, refname) in seq_to_ref.items():
-            print('{}\t{}'.format(refname, counts[refname]), file=op)
+            print("{}\t{}".format(refname, counts[refname]), file=op)
 
 
-@cli.command(name='compute-counts')
-@option('-i', '--input', required=True,
-        help='input path (directory of aln files)')
-@option('-o', '--output', required=True, help='output path (directory)')
-@option('-r', '--reference', required=True,
-        help='path to reference (input) counts file (tab-delim)')
+@cli.command(name="compute-counts")
+@option("-i", "--input", required=True, help="input path (directory of aln files)")
+@option("-o", "--output", required=True, help="output path (directory)")
+@option(
+    "-r",
+    "--reference",
+    required=True,
+    help="path to reference (input) counts file (tab-delim)",
+)
 def compute_counts(input, output, reference):
     """(DEPRECATED) compute counts from aligned bam file"""
     input_dir = osp.abspath(input)
@@ -515,42 +682,42 @@ def compute_counts(input, output, reference):
     # load reference (i.e., input) counts
     ref_names = []
     ref_counts = []
-    with open(reference, 'r') as ip:
+    with open(reference, "r") as ip:
         # burn header
         _ = next(ip)
         for line in ip:
-            fields = line.split('\t')
+            fields = line.split("\t")
             ref_names.append(fields[0].strip())
             ref_counts.append(round(float(fields[1])))
 
     # compute count dicts
-    for input_file in glob(pjoin(input_dir, '*.aln')):
+    for input_file in glob(pjoin(input_dir, "*.aln")):
         print(input_file)
         sys.stdout.flush()
         counts = {}
         sample = osp.splitext(osp.basename(input_file))[0]
         # accumulate counts
-        with open(input_file, 'r') as ip:
+        with open(input_file, "r") as ip:
             for line in ip:
-                ref_clone = line.split('\t')[2].strip()
+                ref_clone = line.split("\t")[2].strip()
                 counts[ref_clone] = counts.get(ref_clone, 0) + 1
         # write counts
-        output_file = pjoin(output_dir, sample + '.tsv')
-        with open(output_file, 'w') as op:
-            print('id\tinput\t{0}'.format(sample), file=op)
+        output_file = pjoin(output_dir, sample + ".tsv")
+        with open(output_file, "w") as op:
+            print("id\tinput\t{0}".format(sample), file=op)
             for (ref_name, ref_count) in zip(ref_names, ref_counts):
-                record = '{0}\t{1}\t{2}'.format(
-                    ref_name, ref_count, counts.get(ref_name, 0))
+                record = "{0}\t{1}\t{2}".format(
+                    ref_name, ref_count, counts.get(ref_name, 0)
+                )
                 print(record, file=op)
 
 
-@cli.command(name='gen-covariates')
-@option('-i', '--input', required=True,
-        help='input path to merged count file')
-@option('-s', '--substring', required=True,
-        help='substring to match against column names')
-@option('-o', '--output', required=True,
-        help='output file (recommend .tsv extension)')
+@cli.command(name="gen-covariates")
+@option("-i", "--input", required=True, help="input path to merged count file")
+@option(
+    "-s", "--substring", required=True, help="substring to match against column names"
+)
+@option("-o", "--output", required=True, help="output file (recommend .tsv extension)")
 def gen_covariates(input, substring, output):
     """(DEPRECATED) compute covariates for input to stat model
 
@@ -561,45 +728,57 @@ def gen_covariates(input, substring, output):
     """
     input_file = osp.abspath(input)
     output_file = osp.abspath(output)
-    counts = pd.read_csv(input_file, sep='\t', header=0, index_col=0)
+    counts = pd.read_csv(input_file, sep="\t", header=0, index_col=0)
     matched_columns = [col for col in counts.columns if substring in col]
     sums = counts[matched_columns].sum()
     normed = counts[matched_columns] / sums * sums.median()
     medians = normed.median(axis=1)
-    medians.name = 'input'
-    medians.to_csv(output_file, sep='\t', header=True, index_label='id')
+    medians.name = "input"
+    medians.to_csv(output_file, sep="\t", header=True, index_label="id")
 
 
-@cli.command(name='compute-pvals')
-@option('-i', '--input', required=True, help='input path')
-@option('-o', '--output', required=True, help='output path')
-@option('-b', '--batch-submit',
-        help='batch submit command to prefix pval command invocation')
-@option('-d', '--dry-run', is_flag=True,
-        help='Dry run; print out commands to execute for batch submit')
+@cli.command(name="compute-pvals")
+@option("-i", "--input", required=True, help="input path")
+@option("-o", "--output", required=True, help="output path")
+@option(
+    "-b",
+    "--batch-submit",
+    help="batch submit command to prefix pval command invocation",
+)
+@option(
+    "-d",
+    "--dry-run",
+    is_flag=True,
+    help="Dry run; print out commands to execute for batch submit",
+)
 def compute_pvals(input, output, batch_submit, dry_run):
     """(DEPRECATED) compute p-values from counts"""
     from .genpois import (
-        estimate_GP_distributions, lambda_theta_regression, precompute_pvals)
+        estimate_GP_distributions,
+        lambda_theta_regression,
+        precompute_pvals,
+    )
+
     if batch_submit is not None:
         # run compute-pvals on each file using batch submit command
         input_dir = osp.abspath(input)
         output_dir = osp.abspath(output)
         if not dry_run:
             os.makedirs(output_dir, mode=0o755)
-        pval_cmd_template = 'phip compute-pvals -i {input} -o {output}'
-        for input_file in glob(pjoin(input_dir, '*.tsv')):
+        pval_cmd_template = "phip compute-pvals -i {input} -o {output}"
+        for input_file in glob(pjoin(input_dir, "*.tsv")):
             sample = osp.splitext(osp.basename(input_file))[0]
-            output_file = pjoin(output_dir, '{0}.pvals.tsv'.format(sample))
-            pval_cmd = pval_cmd_template.format(
-                input=input_file, output=output_file)
-            submit_cmd = '{batch_cmd} {app_cmd}'.format(
-                batch_cmd=batch_submit, app_cmd=pval_cmd)
+            output_file = pjoin(output_dir, "{0}.pvals.tsv".format(sample))
+            pval_cmd = pval_cmd_template.format(input=input_file, output=output_file)
+            submit_cmd = "{batch_cmd} {app_cmd}".format(
+                batch_cmd=batch_submit, app_cmd=pval_cmd
+            )
             if dry_run:
                 print(submit_cmd.strip())
             else:
-                p = Popen(submit_cmd.strip(), shell=True, stdout=PIPE,
-                          universal_newlines=True)
+                p = Popen(
+                    submit_cmd.strip(), shell=True, stdout=PIPE, universal_newlines=True
+                )
                 print(p.communicate()[0])
     else:
         # actually compute p-vals on single file
@@ -609,11 +788,11 @@ def compute_pvals(input, output, batch_submit, dry_run):
         samples = None
         input_counts = []
         output_counts = []
-        with open(input_file, 'r') as ip:
-            header_fields = next(ip).split('\t')
+        with open(input_file, "r") as ip:
+            header_fields = next(ip).split("\t")
             samples = [f.strip() for f in header_fields[2:]]
-            for line in tqdm(ip, desc='Loading data'):
-                fields = line.split('\t')
+            for line in tqdm(ip, desc="Loading data"):
+                fields = line.split("\t")
                 clones.append(fields[0].strip())
                 input_counts.append(int(fields[1]))
                 output_counts.append(np.int_(fields[2:]))
@@ -623,14 +802,12 @@ def compute_pvals(input, output, batch_submit, dry_run):
         uniq_input_values = list(set(input_counts))
 
         # Estimate generalized Poisson distributions for every input count
-        (lambdas, thetas, idxs) = estimate_GP_distributions(input_counts,
-                                                            output_counts,
-                                                            uniq_input_values)
+        (lambdas, thetas, idxs) = estimate_GP_distributions(
+            input_counts, output_counts, uniq_input_values
+        )
 
         # Regression on all of the theta and lambda values computed
-        (lambda_fits, theta_fits) = lambda_theta_regression(lambdas,
-                                                            thetas,
-                                                            idxs)
+        (lambda_fits, theta_fits) = lambda_theta_regression(lambdas, thetas, idxs)
 
         # Precompute CDF for possible input-output combinations
         uniq_combos = []
@@ -639,26 +816,40 @@ def compute_pvals(input, output, batch_submit, dry_run):
         log10pval_hash = precompute_pvals(lambda_fits, theta_fits, uniq_combos)
 
         # Compute p-values for each clone using regressed GP parameters
-        with open(output_file, 'w') as op:
-            header = '\t'.join(['id'] + samples)
+        with open(output_file, "w") as op:
+            header = "\t".join(["id"] + samples)
             print(header, file=op)
-            for (clone, ic, ocs) in zip(tqdm(clones, desc='Writing scores'), input_counts, output_counts):
+            for (clone, ic, ocs) in zip(
+                tqdm(clones, desc="Writing scores"), input_counts, output_counts
+            ):
                 fields = [clone]
                 for (i, oc) in enumerate(ocs):
-                    fields.append('{:.2f}'.format(log10pval_hash[(i, ic, oc)]))
-                print('\t'.join(fields), file=op)
+                    fields.append("{:.2f}".format(log10pval_hash[(i, ic, oc)]))
+                print("\t".join(fields), file=op)
 
 
-@cli.command(name='merge-columns')
-@option('-i', '--input', required=True,
-        help='input path (directory of tab-delim files)')
-@option('-o', '--output', required=True, help='output path')
-@option('-m', '--method', type=Choice(['iter', 'outer']), default='iter',
-        help='merge/join method')
-@option('-p', '--position', type=int, default=1,
-        help='the field position to merge (0-indexed)')
-@option('-d', '--index-cols', default=1,
-        help='number of columns to use as index/row-key')
+@cli.command(name="merge-columns")
+@option(
+    "-i", "--input", required=True, help="input path (directory of tab-delim files)"
+)
+@option("-o", "--output", required=True, help="output path")
+@option(
+    "-m",
+    "--method",
+    type=Choice(["iter", "outer"]),
+    default="iter",
+    help="merge/join method",
+)
+@option(
+    "-p",
+    "--position",
+    type=int,
+    default=1,
+    help="the field position to merge (0-indexed)",
+)
+@option(
+    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
+)
 def merge_columns(input, output, method, position, index_cols):
     """merge tab-delimited files
 
@@ -672,41 +863,53 @@ def merge_columns(input, output, method, position, index_cols):
     """
     input_dir = os.path.abspath(input)
     output_file = os.path.abspath(output)
-    input_files = glob(pjoin(input_dir, '*.tsv'))
-    if method == 'iter':
-        file_iterators = [open(f, 'r') for f in input_files]
+    input_files = glob(pjoin(input_dir, "*.tsv"))
+    if method == "iter":
+        file_iterators = [open(f, "r") for f in input_files]
         file_headers = [osp.splitext(osp.basename(f))[0] for f in input_files]
-        with open(output_file, 'w') as op:
+        with open(output_file, "w") as op:
             # iterate through lines
             for lines in zip(*file_iterators):
-                fields_array = [[field.strip() for field in line.split('\t')]
-                                for line in lines]
+                fields_array = [
+                    [field.strip() for field in line.split("\t")] for line in lines
+                ]
                 # check that join column is the same
                 for fields in fields_array[1:]:
                     assert fields_array[0][:index_cols] == fields[:index_cols]
-                merged_fields = (fields_array[0][:index_cols] +
-                                 [f[position] for f in fields_array])
-                print('\t'.join(merged_fields), file=op)
-    elif method == 'outer':
+                merged_fields = fields_array[0][:index_cols] + [
+                    f[position] for f in fields_array
+                ]
+                print("\t".join(merged_fields), file=op)
+    elif method == "outer":
+
         def load(path):
             icols = list(range(index_cols))
             ucols = icols + [position]
-            return pd.read_csv(path, sep='\t', header=0, dtype=str,
-                               index_col=icols, usecols=ucols)
+            return pd.read_csv(
+                path, sep="\t", header=0, dtype=str, index_col=icols, usecols=ucols
+            )
 
         dfs = [load(path) for path in input_files]
-        merge = lambda l, r: pd.merge(l, r, how='outer', left_index=True, right_index=True)
+        merge = lambda l, r: pd.merge(
+            l, r, how="outer", left_index=True, right_index=True
+        )
         df = reduce(merge, dfs).fillna(0)
-        df.to_csv(output, sep='\t', float_format='%.2f')
+        df.to_csv(output, sep="\t", float_format="%.2f")
 
 
-@cli.command(name='normalize-counts')
-@option('-i', '--input', required=True, help='input counts (tab-delim)')
-@option('-o', '--output', required=True, help='output path')
-@option('-m', '--method', type=Choice(['col-sum', 'size-factors']),
-        default='size-factors', help='normalization method')
-@option('-d', '--index-cols', default=1,
-        help='number of columns to use as index/row-key')
+@cli.command(name="normalize-counts")
+@option("-i", "--input", required=True, help="input counts (tab-delim)")
+@option("-o", "--output", required=True, help="output path")
+@option(
+    "-m",
+    "--method",
+    type=Choice(["col-sum", "size-factors"]),
+    default="size-factors",
+    help="normalization method",
+)
+@option(
+    "-d", "--index-cols", default=1, help="number of columns to use as index/row-key"
+)
 def normalize_counts(input, output, method, index_cols):
     """normalize count matrix
 
@@ -714,10 +917,10 @@ def normalize_counts(input, output, method, index_cols):
     * Size factors from Anders and Huber 2010 (similar to TMM)
     * Normalize to constant column-sum of 1e6
     """
-    df = pd.read_csv(input, sep='\t', header=0, index_col=list(range(index_cols)))
-    if method == 'col-sum':
+    df = pd.read_csv(input, sep="\t", header=0, index_col=list(range(index_cols)))
+    if method == "col-sum":
         normalized = df / (df.sum() / 1e6)
-    elif method == 'size-factors':
+    elif method == "size-factors":
         factors = compute_size_factors(df.values)
         normalized = df / factors
-    normalized.to_csv(output, sep='\t', float_format='%.2f')
+    normalized.to_csv(output, sep="\t", float_format="%.2f")

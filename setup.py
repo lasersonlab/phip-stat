@@ -16,21 +16,24 @@ from setuptools import find_packages, setup
 
 
 def readme():
-    with open('README.md', 'r') as ip:
+    with open("README.md", "r") as ip:
         return ip.read()
 
+
 setup(
-    name='phip-stat',
-    version='0.4.0.dev0',
-    description='PhIP-seq analysis tools',
+    name="phip-stat",
+    version="0.4.0.dev0",
+    description="PhIP-seq analysis tools",
     long_description=readme(),
-    url='https://github.com/lasersonlab/phip-stat',
-    author='Laserson Lab',
-    license='Apache License, Version 2.0',
-    classifiers=['Programming Language :: Python :: 2.6',
-                 'Programming Language :: Python :: 2.7',
-                 'Programming Language :: Python :: 3'],
+    url="https://github.com/lasersonlab/phip-stat",
+    author="Laserson Lab",
+    license="Apache License, Version 2.0",
+    classifiers=[
+        "Programming Language :: Python :: 2.6",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+    ],
     packages=find_packages(),
-    install_requires=['click', 'tqdm', 'numpy', 'scipy', 'pandas'],
-    entry_points={'console_scripts': ['phip = phip.cli:cli']}
+    install_requires=["click", "tqdm", "numpy", "scipy", "pandas"],
+    entry_points={"console_scripts": ["phip = phip.cli:cli"]},
 )

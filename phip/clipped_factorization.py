@@ -7,15 +7,16 @@ from tensorflow.contrib.distributions import percentile
 
 
 def do_clipped_factorization(
-        counts_df,
-        rank=3,
-        clip_percentile=99.9,
-        learning_rate=1.0,
-        minibatch_size=1024 * 32,
-        patience=5,
-        max_epochs=1000,
-        normalize_to_reads_per_million=True,
-        log_every_seconds=10):
+    counts_df,
+    rank=3,
+    clip_percentile=99.9,
+    learning_rate=1.0,
+    minibatch_size=1024 * 32,
+    patience=5,
+    max_epochs=1000,
+    normalize_to_reads_per_million=True,
+    log_every_seconds=10,
+):
     """
     Attempt to detect and correct for clone and sample batch effects by
     subtracting off a learned low-rank reconstruction of the counts matrix.
@@ -94,40 +95,32 @@ def do_clipped_factorization(
         minibatch_size = len(counts_df)
 
     # Placeholders
-    target = tf.placeholder(
-        name="target", dtype="float32", shape=[None, s])
-    minibatch_indices = tf.placeholder(
-        name="minibatch_indices", dtype="int32")
+    target = tf.placeholder(name="target", dtype="float32", shape=[None, s])
+    minibatch_indices = tf.placeholder(name="minibatch_indices", dtype="int32")
 
     # Variables
-    a = tf.Variable(
-        np.random.rand(n, rank), name="A", dtype="float32")
-    b = tf.Variable(
-        np.random.rand(rank, s), name="B", dtype="float32")
+    a = tf.Variable(np.random.rand(n, rank), name="A", dtype="float32")
+    b = tf.Variable(np.random.rand(rank, s), name="B", dtype="float32")
     clip_threshold = tf.Variable(observed.max().max())
 
     # Derived quantities
-    reconstruction = tf.matmul(
-        tf.gather(a, minibatch_indices), b)
+    reconstruction = tf.matmul(tf.gather(a, minibatch_indices), b)
     differences = target - reconstruction
 
     # unclipped_term is based only on the minimum unclipped error for each
     # clone. The intuition is that we know for every clone at least one sample
     # must be a non-hit (e.g. a beads only sample), and so should be well modeled
     # by the background process.
-    unclipped_term = tf.reduce_min(
-        tf.pow(differences, 2), axis=1)
+    unclipped_term = tf.reduce_min(tf.pow(differences, 2), axis=1)
     loss = (
-        tf.reduce_mean(
-            tf.pow(tf.minimum(differences, clip_threshold), 2))
-        + tf.reduce_mean(unclipped_term) / s)
+        tf.reduce_mean(tf.pow(tf.minimum(differences, clip_threshold), 2))
+        + tf.reduce_mean(unclipped_term) / s
+    )
 
-    update_clip_value = clip_threshold.assign(
-        percentile(differences, clip_percentile))
+    update_clip_value = clip_threshold.assign(percentile(differences, clip_percentile))
 
     # Training
-    train_step = tf.train.AdamOptimizer(
-        learning_rate=learning_rate).minimize(loss)
+    train_step = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
     init = tf.global_variables_initializer()
 
@@ -140,22 +133,21 @@ def do_clipped_factorization(
         for i in range(max_epochs):
             indices = np.array(list(range(observed.shape[0])))
             np.random.shuffle(indices)
-            for minibatch_indices_value in np.array_split(indices, int(
-                            len(indices) / minibatch_size)):
+            for minibatch_indices_value in np.array_split(
+                indices, int(len(indices) / minibatch_size)
+            ):
                 minibatch_indices_value = minibatch_indices_value[:minibatch_size]
                 if len(minibatch_indices_value) == minibatch_size:
                     feed_dict = {
                         target: observed.values[minibatch_indices_value],
-                        minibatch_indices: minibatch_indices_value
+                        minibatch_indices: minibatch_indices_value,
                     }
                     session.run(train_step, feed_dict=feed_dict)
 
-            feed_dict = {
-                target: observed,
-                minibatch_indices: all_indices,
-            }
+            feed_dict = {target: observed, minibatch_indices: all_indices}
             (clip_threshold_value, cost_value) = session.run(
-                [update_clip_value, loss], feed_dict=feed_dict)
+                [update_clip_value, loss], feed_dict=feed_dict
+            )
 
             # Update best epoch
             if best_cost_value is None or cost_value < best_cost_value:
@@ -165,11 +157,15 @@ def do_clipped_factorization(
 
             # Log
             if log_every_seconds and time.time() - last_log_at > log_every_seconds:
-                print("[Epoch %5d] %f, truncating at %f%s" % (
-                    i,
-                    cost_value,
-                    clip_threshold_value,
-                    ' [new best]' if i == best_epoch else ''))
+                print(
+                    "[Epoch %5d] %f, truncating at %f%s"
+                    % (
+                        i,
+                        cost_value,
+                        clip_threshold_value,
+                        " [new best]" if i == best_epoch else "",
+                    )
+                )
 
             # Stop criterion
             if i - best_epoch > patience:
@@ -177,14 +173,8 @@ def do_clipped_factorization(
                 break
 
     background_names = ["_background_%d" % i for i in range(rank)]
-    best_a = pd.DataFrame(
-        best_a,
-        index=observed.index,
-        columns=background_names)
-    best_b = pd.DataFrame(
-        best_b,
-        index=background_names,
-        columns=observed.columns)
+    best_a = pd.DataFrame(best_a, index=observed.index, columns=background_names)
+    best_b = pd.DataFrame(best_b, index=background_names, columns=observed.columns)
 
     results = observed - np.matmul(best_a, best_b)
     for name in background_names:

@@ -9,11 +9,12 @@ from phip.utils import DEFAULT_FDR
 
 
 def do_hit_calling(
-        counts_df,
-        beads_only_samples,
-        fdr=DEFAULT_FDR,
-        normalize_to_reads_per_million=None,
-        verbosity=2):
+    counts_df,
+    beads_only_samples,
+    fdr=DEFAULT_FDR,
+    normalize_to_reads_per_million=None,
+    verbosity=2,
+):
     """
     Call hits at the specified FDR using a heuristic.
 
@@ -109,7 +110,7 @@ def do_hit_calling(
 
     counts_df = np.maximum(counts_df, 0)
     if normalize_to_reads_per_million:
-        counts_df = (counts_df * 1e6 / counts_df.sum(0))
+        counts_df = counts_df * 1e6 / counts_df.sum(0)
         if verbosity > 0:
             print("Normalized to reads-per-million.")
     elif verbosity > 0:
@@ -126,33 +127,35 @@ def do_hit_calling(
     start = time.time()
 
     def print_summary(info):
-        binary_hits_df = (
-            info['rescaled_df'][pull_down_samples] > info['hit_threshold'])
+        binary_hits_df = info["rescaled_df"][pull_down_samples] > info["hit_threshold"]
 
         hits_by_samples = binary_hits_df.sum(0)
 
-        print("  Pseudocount       : %0.4f" % info['pseudocount'])
-        print("  Hit threshold     : %0.4f (=10**%0.4f)" % (
-            info['hit_threshold'],
-            np.log10(info['hit_threshold'])))
-        print("  Clones w/ a hit   : %d (%0.1f%%)" % (
-            binary_hits_df.any(1).sum(),
-            binary_hits_df.any(1).mean() * 100.0))
+        print("  Pseudocount       : %0.4f" % info["pseudocount"])
+        print(
+            "  Hit threshold     : %0.4f (=10**%0.4f)"
+            % (info["hit_threshold"], np.log10(info["hit_threshold"]))
+        )
+        print(
+            "  Clones w/ a hit   : %d (%0.1f%%)"
+            % (binary_hits_df.any(1).sum(), binary_hits_df.any(1).mean() * 100.0)
+        )
         print("  Median hits/sample: %d" % hits_by_samples.median())
-        print("  ... min/mean/max  : %0.4f/%0.4f/%0.4f"  % (
-            hits_by_samples.min(),
-            hits_by_samples.mean(),
-            hits_by_samples.max()))
-        print("  Total hits        : %d" % info['total_hits'])
+        print(
+            "  ... min/mean/max  : %0.4f/%0.4f/%0.4f"
+            % (hits_by_samples.min(), hits_by_samples.mean(), hits_by_samples.max())
+        )
+        print("  Total hits        : %d" % info["total_hits"])
         print("  Elapsed           : %0.1f sec." % (time.time() - start))
 
     def function_to_minimize(current_log10_pseudocount):
         current_info = hits_at_specified_pseudocount(
-            pseudocount=10**current_log10_pseudocount,
+            pseudocount=10 ** current_log10_pseudocount,
             counts_df=counts_df,
             beads_only_samples=beads_only_samples,
             pull_down_samples=pull_down_samples,
-            fdr=fdr)
+            fdr=fdr,
+        )
         if verbosity > 1:
             print("*** Iteration %5d *** " % iteration_mutable_value[0])
             print_summary(current_info)
@@ -160,12 +163,10 @@ def do_hit_calling(
         return -1 * current_info["total_hits"]
 
     result = minimize_scalar(
-        function_to_minimize,
-        bounds=(-10, 10),
-        method="bounded",
-        options={'xatol': 1.0})
+        function_to_minimize, bounds=(-10, 10), method="bounded", options={"xatol": 1.0}
+    )
 
-    pseudocount = 10**result.x
+    pseudocount = 10 ** result.x
 
     # Call helper one more time to get final info.
     info = hits_at_specified_pseudocount(
@@ -173,22 +174,24 @@ def do_hit_calling(
         counts_df=counts_df,
         beads_only_samples=beads_only_samples,
         pull_down_samples=pull_down_samples,
-        fdr=fdr)
+        fdr=fdr,
+    )
 
     if verbosity > 0:
         print("\n*** HIT CALLING RESULTS ***")
         print_summary(info)
 
-    return info['rescaled_df'] / info['hit_threshold']
+    return info["rescaled_df"] / info["hit_threshold"]
 
 
 def hits_at_specified_pseudocount(
-        pseudocount,
-        counts_df,
-        beads_only_samples,
-        pull_down_samples,
-        fdr,
-        reference_quantile=0.999):
+    pseudocount,
+    counts_df,
+    beads_only_samples,
+    pull_down_samples,
+    fdr,
+    reference_quantile=0.999,
+):
     """
     Compute the total number of hits at a particular smoothing value and FDR.
 
@@ -227,21 +230,22 @@ def hits_at_specified_pseudocount(
     """
     all_samples = list(beads_only_samples) + list(pull_down_samples)
 
-    log_counts_df = np.log10(
-        pseudocount + np.maximum(counts_df, 0))
+    log_counts_df = np.log10(pseudocount + np.maximum(counts_df, 0))
 
     # Compute clones x samples matrix of rescaled values.
     rescaled_df = pd.DataFrame(
-        index=counts_df.index, columns=all_samples, dtype="float32")
+        index=counts_df.index, columns=all_samples, dtype="float32"
+    )
 
     for s in beads_only_samples:
         other_beads_only = [c for c in beads_only_samples if c != s]
-        rescaled_df[s] = (
-            log_counts_df[s] - log_counts_df[other_beads_only].quantile(
-                reference_quantile, axis=1))
+        rescaled_df[s] = log_counts_df[s] - log_counts_df[other_beads_only].quantile(
+            reference_quantile, axis=1
+        )
 
-    beads_only_high_quantile = (
-        log_counts_df[beads_only_samples].quantile(reference_quantile, axis=1))
+    beads_only_high_quantile = log_counts_df[beads_only_samples].quantile(
+        reference_quantile, axis=1
+    )
     for s in pull_down_samples:
         rescaled_df[s] = log_counts_df[s] - beads_only_high_quantile
 
@@ -258,19 +262,20 @@ def hits_at_specified_pseudocount(
         residual = position - low_index
         if low_index >= len(sorted_array) - 1:
             return sorted_array[-1]
-        return sorted_array[low_index] + (
-            sorted_array[low_index + 1] - sorted_array[low_index]
-        ) * residual
+        return (
+            sorted_array[low_index]
+            + (sorted_array[low_index + 1] - sorted_array[low_index]) * residual
+        )
 
-    flattened_sorted_pull_down_values = (
-        rescaled_df[pull_down_samples].values.flatten())
+    flattened_sorted_pull_down_values = rescaled_df[pull_down_samples].values.flatten()
     flattened_sorted_pull_down_values.sort()
 
     def fast_count_exceeding_value(sorted_array, value):
         # Fast version of (sorted_array > value).sum()
         # Optimization relies on the array being sorted, low to high.
         return len(sorted_array) - (
-            np.searchsorted(sorted_array, np.float32(value), side='right'))
+            np.searchsorted(sorted_array, np.float32(value), side="right")
+        )
 
     # Pick a hit threshold. Rescaled values greater than this are hits.
     #
@@ -288,12 +293,12 @@ def hits_at_specified_pseudocount(
 
         # Total hits: how many ratios exceed our threshold.
         num_hits = fast_count_exceeding_value(
-            flattened_sorted_pull_down_values, hit_threshold)
+            flattened_sorted_pull_down_values, hit_threshold
+        )
 
         # Num false hits: product of the quantile we are at and the total number
         # of tests we are making.
-        num_false_hits = (1 - quantile) * len(pull_down_samples) * len(
-            rescaled_df)
+        num_false_hits = (1 - quantile) * len(pull_down_samples) * len(rescaled_df)
 
         # FDR is fraction of total hits that are expected to be false.
         return num_false_hits / num_hits
@@ -302,16 +307,18 @@ def hits_at_specified_pseudocount(
         lambda v: (empirical_fdr(v) - fdr) ** 2,
         method="bounded",
         bounds=(1, 10),
-        options={'xatol': 0.01})
+        options={"xatol": 0.01},
+    )
 
     quantile = 1 - 10 ** (-1 * transformed_quantile_result.x)
     hit_threshold = fast_quantile(empirical_null, quantile)
     total_hits = fast_count_exceeding_value(
-        flattened_sorted_pull_down_values, hit_threshold)
+        flattened_sorted_pull_down_values, hit_threshold
+    )
 
     return {
-        'rescaled_df': rescaled_df,
-        'hit_threshold': hit_threshold,
-        'pseudocount': pseudocount,
-        'total_hits': total_hits,
+        "rescaled_df": rescaled_df,
+        "hit_threshold": hit_threshold,
+        "pseudocount": pseudocount,
+        "total_hits": total_hits,
     }

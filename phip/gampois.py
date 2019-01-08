@@ -42,12 +42,18 @@ def fit_gamma(x):
     sl = np.log(x[x > 0]).sum()
 
     def ll(x):
-        return -1 * (m * x[0] * np.log(x[1]) - m * sp.special.gammaln(x[0]) + (x[0] - 1) * sl - x[1] * s)
+        return -1 * (
+            m * x[0] * np.log(x[1])
+            - m * sp.special.gammaln(x[0])
+            + (x[0] - 1) * sl
+            - x[1] * s
+        )
 
-    param = sp.optimize.minimize(ll,
-                                 np.asarray([2, 1]),
-                                 bounds=[(np.nextafter(0, 1), None),
-                                         (np.nextafter(0, 1), None)])
+    param = sp.optimize.minimize(
+        ll,
+        np.asarray([2, 1]),
+        bounds=[(np.nextafter(0, 1), None), (np.nextafter(0, 1), None)],
+    )
     (alpha, beta) = param.x
     return (alpha, beta)
 
@@ -96,9 +102,10 @@ def gamma_poisson_model(counts, trim_percentile=99.9):
     counts is DataFrame; assumed columns are normalized to some size factor.
     """
     upper_bound = sp.stats.scoreatpercentile(counts.values, trim_percentile)
-    trimmed_means = np.ma.mean(np.ma.masked_greater(counts.values, upper_bound), axis=1).data
+    trimmed_means = np.ma.mean(
+        np.ma.masked_greater(counts.values, upper_bound), axis=1
+    ).data
     alpha, beta = fit_gamma(trimmed_means)
-    background_rates = gamma_poisson_posterior_rates(
-        counts, alpha, beta, upper_bound)
+    background_rates = gamma_poisson_posterior_rates(counts, alpha, beta, upper_bound)
     mlxp = mlxp_gamma_poisson(counts, background_rates)
     return alpha, beta, background_rates, mlxp
