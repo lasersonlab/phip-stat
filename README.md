@@ -33,13 +33,13 @@ pip install git+https://github.com/lasersonlab/phip-stat.git
 
 The overall flow of the pipeline is
 
-1. "align" — for each sample count the number of reads derived from each
+1. align — for each sample count the number of reads derived from each
    possible library member
 
-2. "merge" — combine the count values from all samples into a single count
+2. merge — combine the count values from all samples into a single count
    matrix
 
-3. "model" — normalize counts and train a model to compute enrichment
+3. model — normalize counts and train a model to compute enrichment
    scores/hits
 
 An entire NextSeq run with 500M reads can be processed in <30 min on a 4-core
@@ -70,27 +70,7 @@ Commands:
   split-fastq     split fastq files into smaller chunks
 ```
 
-### Example: Exact-matching pipeline
-
-This pipeline will match each read to the reference exactly (or a chosen subset
-of the read). The counts are merged and then normalized. The values are fit to a
-Gamma-Poisson empirical Bayes model.
-
-```bash
-# 1. align
-phip count-exact-matches -r reference.fasta -l 75 -o sample_counts/sample1.counts.tsv sample1.fastq.gz
-# ...
-phip count-exact-matches -r reference.fasta -l 75 -o sample_counts/sampleN.counts.tsv sampleN.fastq.gz
-
-# 2. merge
-phip merge-columns -m iter -i sample_counts -o counts.tsv
-
-# 3. model
-phip normalize-counts -m size-factors -i counts.tsv -o normalized_counts.tsv
-phip gamma-poisson-model -t 99.9 -i normalized_counts.tsv -o gamma-poisson
-```
-
-### Example: kallisto pipeline
+### Example pipeline: kallisto alignment followed by Gamma-Poisson model
 
 This pipeline will use kallisto to pseudoalign the reads to the reference.
 Because the output of each alignment step is a directory, the merge step uses a
@@ -112,13 +92,33 @@ phip merge-kallisto-tpm -i sample_counts -o cpm.tsv
 phip gamma-poisson-model -t 99.9 -i cpm.tsv -o gamma-poisson
 ```
 
-### Example: bowtie2 pipeline
+### Example pipeline: exact-matching reads followed by matrix factorization
+
+This pipeline will match each read to the reference exactly (or a chosen subset
+of the read). The counts are merged and then normalized. The values are fit to a
+Gamma-Poisson empirical Bayes model.
+
+```bash
+# 1. align
+phip count-exact-matches -r reference.fasta -l 75 -o sample_counts/sample1.counts.tsv sample1.fastq.gz
+# ...
+phip count-exact-matches -r reference.fasta -l 75 -o sample_counts/sampleN.counts.tsv sampleN.fastq.gz
+
+# 2. merge
+phip merge-columns -m iter -i sample_counts -o counts.tsv
+
+# 3. model
+phip clipped-factorization-model --rank 2 -i counts.tsv -o residuals.tsv
+phip call-hits -i residuals.tsv -o hits.tsv --beads-regex ".*BEADS_ONLY.*"
+```
+
+### Example pipeline: bowtie2 alignment followed by normalization and Gamma-Poisson
 
 This example uses bowtie2, which should give the maximum sensitivity at the
-expense of speed. The main command accomplishes the following: align reads to
-reference, sort and convert to BAM, compute coverage depth at each position, for
-each "chromosome" (clone) take only the largest number observed, finally sort by
-clone identifier.
+expense of speed. The main bowtie2 command accomplishes the following: align
+reads to reference, sort and convert to BAM, compute coverage depth at each
+position of each clone, for each clone take only the largest number observed,
+finally sort by clone identifier.
 
 ```bash
 # 1. align
