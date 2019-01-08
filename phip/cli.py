@@ -31,9 +31,7 @@ from click import group, command, option, Path, Choice
 import pandas as pd
 import numpy as np
 
-from phip.clipped_factorization import do_clipped_factorization
-from phip.hit_calling import do_hit_calling, DEFAULT_FDR
-from phip.utils import compute_size_factors, readfq
+from phip.utils import compute_size_factors, readfq, DEFAULT_FDR
 
 # handle gzipped or uncompressed files
 def open_maybe_compressed(*args, **kwargs):
@@ -165,6 +163,8 @@ def clipped_factorization_model(
     batch effects. A few additional rows and columns (named _background_0,
     _background_1, ...) giving the learned effects are also included.
     """
+    from phip.clipped_factorization import do_clipped_factorization
+
     counts = pd.read_csv(
         input, sep='\t', header=0, index_col=list(range(index_cols)))
 
@@ -249,6 +249,8 @@ def call_hits(
     See the documentation for `hit_calling.do_hit_calling()` for details on
     the implementation.
     """
+    from phip.hit_calling import do_hit_calling
+
     original_counts = pd.read_csv(
         input, sep='\t', header=0, index_col=list(range(index_cols)))
     counts = original_counts
@@ -460,7 +462,6 @@ def align_parts(input, output, index, batch_submit, threads, trim3, dry_run):
 
 
 @cli.command(name="count-exact-matches")
-@argument('input')
 @option('-i', '--input', required=True, type=Path(exists=True, dir_okay=False),
         help='input fastq (gzipped ok)')
 @option('-o', '--input', required=True, type=Path(exists=True, dir_okay=False),

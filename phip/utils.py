@@ -13,6 +13,10 @@
 # limitations under the License.
 
 
+# used for hit calling
+DEFAULT_FDR = 0.01
+
+
 def one_base_mutants(seq):
         alphabet = set(['A', 'C', 'G', 'T', 'N'])
         for i in range(len(seq)):

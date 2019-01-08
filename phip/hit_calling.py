@@ -5,8 +5,7 @@ import pandas as pd
 import math
 from scipy.optimize import minimize_scalar
 
-
-DEFAULT_FDR = 0.01
+from phip.utils import DEFAULT_FDR
 
 
 def do_hit_calling(
@@ -316,4 +315,3 @@ def hits_at_specified_pseudocount(
         'pseudocount': pseudocount,
         'total_hits': total_hits,
     }
-
