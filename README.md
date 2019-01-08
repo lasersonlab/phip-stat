@@ -95,8 +95,9 @@ phip gamma-poisson-model -t 99.9 -i cpm.tsv -o gamma-poisson
 ### Example pipeline: exact-matching reads followed by matrix factorization
 
 This pipeline will match each read to the reference exactly (or a chosen subset
-of the read). The counts are merged and then normalized. The values are fit to a
-Gamma-Poisson empirical Bayes model.
+of the read) followed by merging into a single matrix. The matrix is then
+factored with a low-rank approximation (allowing for clipping) and "hits" are
+called with a heuristic.
 
 ```bash
 # 1. align
