@@ -109,7 +109,7 @@ rule compute_counts:
             with gzip.open(input_file, 'rt') as ip:
                 for (name, seq, _) in tqdm(readfq(ip)):
                     num_reads += 1
-                    refname = seq_to_ref.get(seq)
+                    refname = seq_to_ref.get(seq[:params.read_length])
                     if refname is not None:
                         num_matched += 1
                         counts[refname] += 1
