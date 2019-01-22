@@ -15,7 +15,7 @@ report any problems.
 
 ## Installation
 
-phip-stat runs on Python 3 and minimally depends on click, tqdm, numpy, scipy,
+phip-stat runs on Python 3.6+ and minimally depends on click, tqdm, numpy, scipy,
 and pandas. The matrix factorization model also requires tensorflow.
 
 ```bash
@@ -45,7 +45,6 @@ The overall flow of the pipeline is
 An entire NextSeq run with 500M reads can be processed in <30 min on a 4-core
 laptop (if aligning with a tool like kallisto).
 
-
 ### Command-line interface
 
 All the pipeline tools are accessed through the `phip` executable. All
@@ -70,7 +69,7 @@ Commands:
   split-fastq     split fastq files into smaller chunks
 ```
 
-### Example pipeline: kallisto alignment followed by Gamma-Poisson model
+### Example pipeline 1: kallisto alignment followed by Gamma-Poisson model
 
 This pipeline will use kallisto to pseudoalign the reads to the reference.
 Because the output of each alignment step is a directory, the merge step uses a
@@ -92,7 +91,7 @@ phip merge-kallisto-tpm -i sample_counts -o cpm.tsv
 phip gamma-poisson-model -t 99.9 -i cpm.tsv -o gamma-poisson
 ```
 
-### Example pipeline: exact-matching reads followed by matrix factorization
+### Example pipeline 2: exact-matching reads followed by matrix factorization
 
 This pipeline will match each read to the reference exactly (or a chosen subset
 of the read) followed by merging into a single matrix. The matrix is then
@@ -113,7 +112,7 @@ phip clipped-factorization-model --rank 2 -i counts.tsv -o residuals.tsv
 phip call-hits -i residuals.tsv -o hits.tsv --beads-regex ".*BEADS_ONLY.*"
 ```
 
-### Example pipeline: bowtie2 alignment followed by normalization and Gamma-Poisson
+### Example pipeline 3: bowtie2 alignment followed by normalization and Gamma-Poisson
 
 This example uses bowtie2, which should give the maximum sensitivity at the
 expense of speed. The main bowtie2 command accomplishes the following: align
@@ -149,7 +148,12 @@ phip gamma-poisson-model -t 99.9 -i normalized_counts.tsv -o gamma-poisson
 
 ### Snakemake recipes
 
-TODO
+We include several example Snakemake recipes for easily processing large sets of
+samples at once, e.g.,
+`workflows/example-kallisto-GamPois-factorization.snakefile`. In general the
+configuration section must be edited to specify the location of the raw
+sequencing data.
+
 
 ## Running unit tests
 Unit tests use the `nose` package and can be run with:
