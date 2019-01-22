@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import gzip
 import json
 import os
+import pathlib
 import re
 import sys
 from collections import Counter, OrderedDict
@@ -626,10 +625,10 @@ def normalize_counts(input, output, method, index_cols):
 )
 @option(
     "-o",
-    "--input",
+    "--output",
     required=True,
-    type=Path(exists=True, dir_okay=False),
-    help="input fastq (gzipped ok)",
+    type=Path(exists=False, dir_okay=False),
+    help="output tsv",
 )
 @option(
     "-r",
@@ -646,7 +645,8 @@ def normalize_counts(input, output, method, index_cols):
     help="read length (or, number of bases to use for matching)",
     metavar="<read-length>",
 )
-def count_exact_matches(input, reference, read_length):
+@option("--sample", type=str, help="sample name [default: filename stem]")
+def count_exact_matches(input, output, reference, read_length, sample):
     """Match reads to reference exactly.
 
     Takes the first <read-length> bases of each read and attempt to match it
@@ -657,15 +657,15 @@ def count_exact_matches(input, reference, read_length):
     seq_to_ref = OrderedDict()
     with open(reference, "r") as ip:
         for (ref_name, seq, _) in readfq(ip):
-            seq_to_ref[seq[: params.read_length]] = ref_name
+            seq_to_ref[seq[:read_length]] = ref_name
 
     num_reads = 0
     num_matched = 0
     counts = Counter()
-    with gzip.open(input, "rt") as ip:
+    with open_maybe_compressed(input, "r") as ip:
         for (name, seq, _) in tqdm(readfq(ip)):
             num_reads += 1
-            refname = seq_to_ref.get(seq)
+            refname = seq_to_ref.get(seq[:read_length])
             if refname is not None:
                 num_matched += 1
                 counts[refname] += 1
@@ -677,10 +677,13 @@ def count_exact_matches(input, reference, read_length):
         file=sys.stderr,
     )
 
-    with open(output[0], "w") as op:
-        print("id\t{}".format(wildcards.sample), file=op)
+    if not sample:
+        sample = pathlib.Path(input).stem
+
+    with open(output, "w") as op:
+        print(f"id\t{sample}", file=op)
         for (_, refname) in seq_to_ref.items():
-            print("{}\t{}".format(refname, counts[refname]), file=op)
+            print(f"{refname}\t{counts[refname]}", file=op)
 
 
 # DEPRECATED TOOLS
