@@ -13,6 +13,11 @@
 # limitations under the License.
 
 
+import re
+from collections import namedtuple
+from pathlib import Path
+
+
 # used for hit calling
 DEFAULT_FDR = 0.01
 
@@ -69,6 +74,29 @@ def compute_size_factors(counts):
         .T
     )
     return np.ma.median(masked / geom_means, axis=0).data
+
+
+def fastx_stem(path):
+    m = re.match("(.+)(?:\.fast[aq]|\.fna|\.f[aq])(?:\.gz)?$", Path(path).name)
+    if m is None:
+        raise ValueError(f"Path {path} does not look like a fastx file")
+    return m.group(1)
+
+
+def parse_illumina_fastq_name(path):
+    """Parse Illumina fastq file name"""
+    stem = fastx_stem(path)
+    m = re.match("(.*)_S(\d+)_L(\d+)_([RI][12])_001", stem)
+    IlluminaFastq = namedtuple(
+        "IlluminaFastq", ["sample", "sample_num", "lane", "read", "path"]
+    )
+    return IlluminaFastq(
+        sample=m.group(1),
+        sample_num=int(m.group(2)),
+        lane=int(m.group(3)),
+        read=m.group(4),
+        path=path,
+    )
 
 
 # fmt: off
