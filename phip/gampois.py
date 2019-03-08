@@ -89,7 +89,7 @@ def mlxp_gamma_poisson(counts, rates):
     """
     mlxp = []
     for i in range(counts.shape[0]):
-        mlxp.append(-poisson_logsf(counts.values[i], rates[i]) / np.log(10))
+        mlxp.append(-poisson_logsf(counts.iloc[i].values, rates[i]) / np.log(10))
     mlxp = np.asarray(mlxp)
     mlxp = pd.DataFrame(data=mlxp, index=counts.index, columns=counts.columns)
     mlxp.replace(np.inf, -np.log10(np.finfo(np.float64).tiny), inplace=True)
