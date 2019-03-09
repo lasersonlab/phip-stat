@@ -19,7 +19,7 @@ import scipy.stats
 
 
 def poisson_logsf(counts, rate):
-    counts = np.array(counts) + 1
+    counts = np.asarray(counts) + 1
     accum = counts * np.log(rate) - rate - sp.special.gammaln(counts + 1)
     while True:
         counts += 1
@@ -87,10 +87,10 @@ def mlxp_gamma_poisson(counts, rates):
     counts is DataFrame where each row is assumed to be a set of Poisson draws
     from a variable with Poisson rate in rates.
     """
-    mlxp = []
-    for i in range(counts.shape[0]):
-        mlxp.append(-poisson_logsf(counts.iloc[i].values, rates[i]) / np.log(10))
-    mlxp = np.asarray(mlxp)
+    mlxp = [
+        -poisson_logsf(counts.iloc[i].values, rates[i]) / np.log(10)
+        for i in range(counts.shape[0])
+    ]
     mlxp = pd.DataFrame(data=mlxp, index=counts.index, columns=counts.columns)
     mlxp.replace(np.inf, -np.log10(np.finfo(np.float64).tiny), inplace=True)
     return mlxp
