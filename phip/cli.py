@@ -30,7 +30,11 @@ import pandas as pd
 from click import Choice, Path, command, group, option
 from tqdm import tqdm
 
-from phip.utils import DEFAULT_FDR, compute_size_factors, readfq
+from phip.utils import (
+    DEFAULT_FDR,
+    DEFAULT_REFERENCE_QUANTILE,
+    compute_size_factors,
+    readfq)
 
 
 # handle gzipped or uncompressed files
@@ -309,6 +313,12 @@ def clipped_factorization_model(
     "--fdr", default=DEFAULT_FDR, show_default=True, help="target false discovery rate"
 )
 @option(
+    "--reference-quantile",
+    default=DEFAULT_REFERENCE_QUANTILE,
+    show_default=True,
+    help="Percentile to take of each clone's beads-only samples."
+)
+@option(
     "--normalize-to-reads-per-million",
     type=Choice(["always", "never", "guess"]),
     default="guess",
@@ -333,6 +343,7 @@ def call_hits(
     ignore_columns_regex,
     ignore_rows_regex,
     fdr,
+    reference_quantile,
     normalize_to_reads_per_million,
     verbosity,
 ):
