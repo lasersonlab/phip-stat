@@ -86,14 +86,14 @@ def fastx_stem(path):
 def parse_illumina_fastq_name(path):
     """Parse Illumina fastq file name"""
     stem = fastx_stem(path)
-    m = re.match("(.*)_S(\d+)_L(\d+)_([RI][12])_001", stem)
+    m = re.match("(.*)_S(\d+)(?:_L)?(\d*)_([RI][12])_001", stem)
     IlluminaFastq = namedtuple(
         "IlluminaFastq", ["sample", "sample_num", "lane", "read", "path"]
     )
     return IlluminaFastq(
         sample=m.group(1),
         sample_num=int(m.group(2)),
-        lane=int(m.group(3)),
+        lane=int(m.group(3)) if m.group(3) else None,
         read=m.group(4),
         path=path,
     )
