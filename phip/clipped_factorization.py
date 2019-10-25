@@ -176,7 +176,7 @@ def do_clipped_factorization(
     best_a = pd.DataFrame(best_a, index=observed.index, columns=background_names)
     best_b = pd.DataFrame(best_b, index=background_names, columns=observed.columns)
 
-    results = observed - np.matmul(best_a, best_b)
+    results = observed - np.matmul(best_a.values, best_b.values)
     for name in background_names:
         results[name] = best_a[name]
         results.loc[name] = best_b.loc[name]

@@ -20,7 +20,7 @@ from pathlib import Path
 
 # used for hit calling
 DEFAULT_FDR = 0.01
-DEFAULT_REFERENCE_QUANTILE = 0.999
+DEFAULT_REFERENCE_QUANTILE = 1.0
 
 
 def one_base_mutants(seq):
