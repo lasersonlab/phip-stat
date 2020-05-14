@@ -549,7 +549,16 @@ def merge_columns(input, output, method, position, index_cols):
 
     method: outer -- bona fide outer join of data in each file; loads all files
                      into memory and joins using pandas
+    
+    method: prealloc -- preallocate an array to hold all values; then read each
+                        file into the array
     """
+    def load(path):
+        icols = list(range(index_cols))
+        ucols = icols + [position]
+        return pd.read_csv(
+            path, sep="\t", header=0, dtype=str, index_col=icols, usecols=ucols
+        )
     input_dir = os.path.abspath(input)
     output_file = os.path.abspath(output)
     input_files = glob(pjoin(input_dir, "*.tsv"))
@@ -570,19 +579,25 @@ def merge_columns(input, output, method, position, index_cols):
                 ]
                 print("\t".join(merged_fields), file=op)
     elif method == "outer":
-
-        def load(path):
-            icols = list(range(index_cols))
-            ucols = icols + [position]
-            return pd.read_csv(
-                path, sep="\t", header=0, dtype=str, index_col=icols, usecols=ucols
-            )
-
         dfs = [load(path) for path in input_files]
         merge = lambda l, r: pd.merge(
             l, r, how="outer", left_index=True, right_index=True
         )
         df = reduce(merge, dfs).fillna(0)
+        df.to_csv(output, sep="\t", float_format="%.2f")
+    elif method == "prealloc":
+        # iterate through just the first file to generate the row names
+        with open(input_files[0], "r") as ip:
+            row_names = ["\t".join(line.split("\t")[:index_cols]) for line in ip]
+        data = np.zeros((len(row_names), len(input_files)))
+        column_names = []
+        def load_into(path, i):
+            df = load(path)
+            column_names.append(df.columns[0])
+            data[:, i] = df.iloc[:, 0]
+        for i, path in enumerate(input_files):
+            load_into(path, i)
+        df = pd.DataFrame(data, index=row_names, columns=column_names, copy=False)
         df.to_csv(output, sep="\t", float_format="%.2f")
 
 
