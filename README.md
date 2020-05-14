@@ -124,16 +124,16 @@ finally sort by clone identifier.
 # 1. align
 echo "id\tsample1" > sample_counts/sample1.tsv
 bowtie2 -p 4 -x reference_index -U sample1.fastq.gz \
-    | samtools sort -O BAM
-    | samtools depth -aa -m 100000000 {input} \
+    | samtools sort -O BAM \
+    | samtools depth -aa -m 100000000 - \
     | awk 'BEGIN {OFS="\t"} {counts[$1] = ($3 < counts[$1]) ? counts[$1] : $3} END {for (c in counts) {print c, counts[c]}}' \
     | sort -k 1 \
     >> sample_counts/sample1.tsv
 # ...
 echo "id\tsampleN" > sample_counts/sampleN.tsv
 bowtie2 -p 4 -x reference_index -U sampleN.fastq.gz \
-    | samtools sort -O BAM
-    | samtools depth -aa -m 100000000 {input} \
+    | samtools sort -O BAM \
+    | samtools depth -aa -m 100000000 - \
     | awk 'BEGIN {OFS="\t"} {counts[$1] = ($3 < counts[$1]) ? counts[$1] : $3} END {for (c in counts) {print c, counts[c]}}' \
     | sort -k 1 \
     >> sample_counts/sampleN.tsv
