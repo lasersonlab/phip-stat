@@ -411,14 +411,15 @@ def call_hits(
     total_reads = counts.sum()
     expected_reads = total_reads.median()
 
-    for sample in counts.columns:
-        if total_reads[sample] / expected_reads < discard_sample_reads_fraction:
-            print(
-                "[!!] EXCLUDING SAMPLE %s DUE TO INSUFFICIENT READS "
-                "(%d vs. sample median %d)"
-                % (sample, total_reads[sample], expected_reads)
-            )
-            del counts[sample]
+    if (counts > 0).all().all():
+        for sample in counts.columns:
+            if total_reads[sample] / expected_reads < discard_sample_reads_fraction:
+                print(
+                    "[!!] EXCLUDING SAMPLE %s DUE TO INSUFFICIENT READS "
+                    "(%d vs. sample median %d)"
+                    % (sample, total_reads[sample], expected_reads)
+                )
+                del counts[sample]
 
     beads_only_samples = [
         s for s in counts.columns if re.match(beads_regex, s, flags=re.IGNORECASE)
