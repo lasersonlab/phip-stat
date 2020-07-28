@@ -2,8 +2,11 @@ import time
 
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-from tensorflow.contrib.distributions import percentile
+
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
+from tensorflow_probability.python.stats.quantiles import percentile
 
 
 def do_clipped_factorization(
