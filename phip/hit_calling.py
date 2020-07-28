@@ -5,13 +5,14 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
 
-from phip.utils import DEFAULT_FDR
+from phip.utils import DEFAULT_FDR, DEFAULT_REFERENCE_QUANTILE
 
 
 def do_hit_calling(
     counts_df,
     beads_only_samples,
     fdr=DEFAULT_FDR,
+    reference_quantile=DEFAULT_REFERENCE_QUANTILE,
     normalize_to_reads_per_million=None,
     verbosity=2,
 ):
@@ -86,6 +87,10 @@ def do_hit_calling(
         Names of beads-only samples. These should be columns in counts_df.
     fdr : float
         False discovery rate
+    reference_quantile : float
+        Percentile to take of each clone's beads-only samples. The default is
+        likely fine and the algorithm should not be particularly sensitive to
+        this parameter.
     normalize_to_reads_per_million : boolean
         If true, first divide each column by the total number of reads for that
         sample and multiple by 1 million. If None, do this only when all values
@@ -155,6 +160,7 @@ def do_hit_calling(
             beads_only_samples=beads_only_samples,
             pull_down_samples=pull_down_samples,
             fdr=fdr,
+            reference_quantile=reference_quantile,
         )
         if verbosity > 1:
             print("*** Iteration %5d *** " % iteration_mutable_value[0])
@@ -175,6 +181,7 @@ def do_hit_calling(
         beads_only_samples=beads_only_samples,
         pull_down_samples=pull_down_samples,
         fdr=fdr,
+        reference_quantile=reference_quantile,
     )
 
     if verbosity > 0:
@@ -190,7 +197,7 @@ def hits_at_specified_pseudocount(
     beads_only_samples,
     pull_down_samples,
     fdr,
-    reference_quantile=0.999,
+    reference_quantile=DEFAULT_REFERENCE_QUANTILE,
 ):
     """
     Compute the total number of hits at a particular smoothing value and FDR.

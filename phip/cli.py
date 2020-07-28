@@ -30,7 +30,11 @@ import pandas as pd
 from click import Choice, Path, command, group, option
 from tqdm import tqdm
 
-from phip.utils import DEFAULT_FDR, compute_size_factors, readfq
+from phip.utils import (
+    DEFAULT_FDR,
+    DEFAULT_REFERENCE_QUANTILE,
+    compute_size_factors,
+    readfq)
 
 
 # handle gzipped or uncompressed files
@@ -309,6 +313,19 @@ def clipped_factorization_model(
     "--fdr", default=DEFAULT_FDR, show_default=True, help="target false discovery rate"
 )
 @option(
+    "--reference-quantile",
+    default=DEFAULT_REFERENCE_QUANTILE,
+    show_default=True,
+    help="Percentile to take of each clone's beads-only samples."
+)
+@option(
+    "--discard-sample-reads-fraction",
+    default=0.01,
+    show_default=True,
+    help="Discard samples with fewer than X * m reads, where m is the median "
+    "number of reads across samples",
+)
+@option(
     "--normalize-to-reads-per-million",
     type=Choice(["always", "never", "guess"]),
     default="guess",
@@ -333,6 +350,8 @@ def call_hits(
     ignore_columns_regex,
     ignore_rows_regex,
     fdr,
+    reference_quantile,
+    discard_sample_reads_fraction,
     normalize_to_reads_per_million,
     verbosity,
 ):
@@ -389,6 +408,19 @@ def call_hits(
         )
         counts = counts.loc[~counts.index.isin(rows_to_ignore)]
 
+    total_reads = counts.sum()
+    expected_reads = total_reads.median()
+
+    if (counts > 0).all().all():
+        for sample in counts.columns:
+            if total_reads[sample] / expected_reads < discard_sample_reads_fraction:
+                print(
+                    "[!!] EXCLUDING SAMPLE %s DUE TO INSUFFICIENT READS "
+                    "(%d vs. sample median %d)"
+                    % (sample, total_reads[sample], expected_reads)
+                )
+                del counts[sample]
+
     beads_only_samples = [
         s for s in counts.columns if re.match(beads_regex, s, flags=re.IGNORECASE)
     ]
@@ -400,6 +432,7 @@ def call_hits(
     result_df = do_hit_calling(
         counts,
         beads_only_samples=beads_only_samples,
+        reference_quantile=reference_quantile,
         fdr=fdr,
         normalize_to_reads_per_million={"always": True, "never": False, "guess": None}[
             normalize_to_reads_per_million
