@@ -22,9 +22,10 @@ def readme():
 
 setup(
     name="phip-stat",
-    version="0.5.0",
+    version="0.5.1",
     description="PhIP-seq analysis tools",
     long_description=readme(),
+    long_description_content_type="text/markdown",
     url="https://github.com/lasersonlab/phip-stat",
     author="Laserson Lab",
     license="Apache License, Version 2.0",
