@@ -1,5 +1,10 @@
 # phip-stat: tools for analyzing PhIP-seq data
 
+**NOTE**: This project is no longer being maintained. Please see the phippery, phip-flow, and related projects maintained by Erick Matsen's group:
+https://github.com/matsengrp/phippery
+https://github.com/matsengrp/phip-flow
+
+
 The PhIP-seq assay was first described in [Larman et.
 al.](https://dx.doi.org/10.1038/nbt.1856). This repo contains code for
 processing raw PhIP-seq data into analysis-ready enrichment scores.
