@@ -1,9 +1,13 @@
 # phip-stat: tools for analyzing PhIP-seq data
 
-**NOTE**: This project is no longer being maintained. Please see the phippery, phip-flow, and related projects maintained by Erick Matsen's group:
+**NOTE**: This project is no longer being maintained. Check out the following projects instead.
+
+For Python-based workflows, see the phippery, phip-flow, and related projects maintained by Erick Matsen's group:
 https://github.com/matsengrp/phippery
 https://github.com/matsengrp/phip-flow
 
+For R-based workflows, see the BEER package maintained by groups at Johns Hopkins, in collaboration with the Larman group:
+https://github.com/athchen/beer
 
 The PhIP-seq assay was first described in [Larman et.
 al.](https://dx.doi.org/10.1038/nbt.1856). This repo contains code for
